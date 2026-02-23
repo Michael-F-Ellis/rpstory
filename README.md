@@ -1,9 +1,9 @@
-# RPChat - Editable AI Chat Client
+# RPStory - Editable AI Chat Client
 
-RPChat is a flexible chat interface for roleplaying with AI language models. It allows you to edit both your messages and AI responses, providing full control over the conversation context.
+RPStory is a flexible chat interface for roleplaying with AI language models. It allows you to edit both your messages and AI responses, providing full control over the conversation context.
 
 ## Try It Now
-You can use RPChat directly at: https://michael-f-ellis.github.io/rpchat. Note that you'll need to have or obtain an API key for at least one of the following providers:
+You can use RPStory directly at: https://michael-f-ellis.github.io/rpstory. Note that you'll need to have or obtain an API key for at least one of the following providers:
 *   [`DeepSeek`](https://platform.deepseek.com/api_keys)
 *   [`Fireworks`](https://fireworks.ai/api-keys)
 *   [`Google Gemini`](https://aistudio.google.com/app/apikey)
@@ -43,7 +43,7 @@ You can use RPChat directly at: https://michael-f-ellis.github.io/rpchat. Note t
     *   glm-4.5-air
 
 ### Extensible
-All the CSS, HTML and JavaScript is bundled into a single file you can edit and customize. See [RPChat Build System](BUILD.md) for development instructions and [RPChat Architecture](ARCHITECTURE.md) for a detailed overview of the code.
+All the CSS, HTML and JavaScript is bundled into a single file you can edit and customize. See [RPStory Build System](BUILD.md) for development instructions and [RPStory Architecture](ARCHITECTURE.md) for a detailed overview of the code.
 
 - Add support for new AI providers by editing the `providers.json` file in the repo and rebuilding.
 - - New providers must have endpoints that implement a basic  OpenAI compatible chat API.
@@ -86,7 +86,7 @@ All the CSS, HTML and JavaScript is bundled into a single file you can edit and 
 - Choose a system prompt style from the dropdown (first person, third person, or minimal)
 - Adjust the "Temperature" slider to control response randomness (higher values = more creative/random)
 ### System Prompts
-RPChat comes with preset system prompt styles optimized for different roleplaying scenarios:
+RPStory comes with preset system prompt styles optimized for different roleplaying scenarios:
 - **First Person**: For immersive roleplaying where you interact directly with AI characters. This is the default for new chats.
 - **Third Person**: For collaborative storytelling from an observer perspective
 - **Minimal**: A simple assistant prompt for general conversation, e.g. interactively developing characters or summarizing a plot line.

@@ -531,7 +531,7 @@ async function init() { // Load saved state from sessionStorage
 function initImportExport() {
 	// Set up the import/export functionality
 	RPChat.importExport.setupImportExport(
-		chatManager,                     // Pass the entire chatManager object
+		() => chatManager,               // Pass a getter for the entire chatManager object
 		showStatus                       // Function to show status messages
 	);
 }
@@ -639,7 +639,10 @@ function updateSendButtonState() {
 	// 1. Any message is being edited (besides trailing user message)
 	// 2. The trailing message doesn't exist, is empty, or not being/just been edited
 	const hasClosedEmptyFinalPrompt = trailingMessage && !trailingMessage.isBeingEdited() && trailingMessage.content.trim() === '';
-	if (chatManager.hasActiveEdits()) {
+
+	const hasOtherActiveEdits = chatManager.messages.some(message => message !== trailingMessage && message.isBeingEdited());
+
+	if (hasOtherActiveEdits) {
 		El.sendButton.disabled = true;
 		El.sendLabel.textContent = "One or more messages are being edited";
 	} else if (hasClosedEmptyFinalPrompt) {
@@ -832,14 +835,16 @@ function handleTemperatureChange(event) {
 
 // Handle send button click
 function handleSendMessage() {
+	const trailingMessage = chatManager.getTrailingUserMessage();
+
 	// Check if any message is being edited (other than the trailing one)
-	if (chatManager.hasActiveEdits()) {
+	const hasOtherActiveEdits = chatManager.messages.some(message => message !== trailingMessage && message.isBeingEdited());
+
+	if (hasOtherActiveEdits) {
 		showStatus('Please save or cancel any active edits before sending', 'error');
 		return;
 	}
 
-	// Get the trailing user message
-	const trailingMessage = chatManager.getTrailingUserMessage();
 	if (!trailingMessage || trailingMessage.content.trim() === '') {
 		showStatus('Please enter a message before sending', 'error');
 		return;
@@ -999,23 +1004,13 @@ function handleClearChat() {
 		// Reset system prompt selector to first option
 		El.systemPromptSelector.selectedIndex = 0;
 
-		// Create a new ChatManager with the first system prompt
-		chatManager = new ChatManager(
-			getCurrentSystemPrompt(),
-			showStatus,
-			El.chatContainer,
-			onChatUpdate
-		);
+		// Clear the 3 containers directly using ChatManager's new method
+		chatManager.clear();
 
 		// Clear sessionStorage (except system prompt and settings)
 		sessionStorage.removeItem('chatMessages');
 
-		// Render empty chat
-		chatManager.render();
-
-		// Force update of internal state to match the new empty chat
 		chatManager._notifyUpdate();
-
 		showStatus('Chat cleared');
 	}
 }

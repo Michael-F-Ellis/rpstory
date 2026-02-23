@@ -25,7 +25,6 @@ class ChatManager {
 	 * @param {function} [onUpdateCallback=null] - Callback function to execute when the message list is modified.
 	 */
 	constructor(initialSystemPrompt = 'You are a helpful assistant.', notificationCB = null, container = null, onUpdateCallback = null) {
-		this.messages = [];
 		this.onUpdate = onUpdateCallback; // Store the update callback
 		// Use provided notification callback or a default console log
 		this.notificationHandler = notificationCB || function (message, type = 'info') {
@@ -36,69 +35,54 @@ class ChatManager {
 		// Bind methods that will be used as callbacks to ensure 'this' context
 		this.handleDelete = this.handleDelete.bind(this);
 		this.handleDeleteFromHere = this.handleDeleteFromHere.bind(this);
-		this._ensureTrailingUserMessage = this._ensureTrailingUserMessage.bind(this);
 
-		// --- Enforce System Message Rule ---
-		// Ensure initialSystemPrompt is provided (or use a default)
-		const systemPromptContent = initialSystemPrompt || 'You are a helpful assistant.'; // Ensure non-empty
+		const systemPromptContent = initialSystemPrompt || 'You are a helpful assistant.';
 
-		// Create and add the mandatory system message FIRST.
-		const systemMessage = this.createMessage(
+		// Create the three fixed containers
+		this.systemMessage = this.createMessage(
 			ROLES.SYSTEM,
 			systemPromptContent,
 		);
-		this.messages.push(systemMessage);
-		// --- End System Message Enforcement ---
 
-		// --- Ensure Trailing User Message ---
-		this._ensureTrailingUserMessage(); // Add initial empty user message
-		// --- End Trailing User Message ---
+		this.storyMessage = this.createMessage(
+			ROLES.ASSISTANT,
+			''
+		);
+
+		this.promptMessage = this.createMessage(
+			ROLES.USER,
+			'?'
+		);
 
 		// Note: No initial rendering from constructor to allow setup completion.
-		// Call render() explicitly after instantiation if needed immediately.			}
-
-		/**
-		 * Calls the registered onUpdate callback, if provided.
-		 * @private
-		 */
+		// Call render() explicitly after instantiation if needed immediately.
 	}
 
-	_notifyUpdate() {
-		if (typeof this.onUpdate === 'function') {
-			this.onUpdate();
-		}
+	get messages() {
+		return [this.systemMessage, this.storyMessage, this.promptMessage];
 	}
-	/**
-	 * Helper method to ensure there's always a trailing empty user message
-	 * only if the last message is not a user message.
-	 * @private
-	 */
-	_ensureTrailingUserMessage() {
-		const lastMessage = this.messages[this.messages.length - 1];
-		// Only add an empty user message if the last message is not a user message
-		if (!lastMessage || (lastMessage.role !== ROLES.USER)) {
-			const emptyUserMessage = this.createMessage(
-				ROLES.USER,
-				// Step 2: Ensure trailing user message gets default characterId and visibility
-				// These will be picked up by createMessage's new default parameters.
-				'?',
-			);
-			this.messages.push(emptyUserMessage);
-			// No direct render call here; rely on the calling method to notify
-		}
-	}
-	// Message factory
-	// Step 2: Modify createMessage to accept characterId and visibility
-	createMessage(role, content, characterId = 0, visibility = 1) {
+
+	createMessage(role, content) {
 		return new ChatMessage(
 			role,
 			content,
 			this.handleDelete,
 			this.handleDeleteFromHere,
 			this.notificationHandler,
-			characterId, // Pass to ChatMessage constructor
-			visibility   // Pass to ChatMessage constructor
+			0, // characterId
+			1  // visibility
 		);
+	}
+
+	/**
+	 * Calls the registered onUpdate callback, if provided.
+	 * @private
+	 */
+
+	_notifyUpdate() {
+		if (typeof this.onUpdate === 'function') {
+			this.onUpdate();
+		}
 	}
 
 	/**
@@ -132,32 +116,13 @@ class ChatManager {
 
 			// Handle system message specially
 			if (role === ROLES.SYSTEM) {
-				const systemMessageIndex = this.messages.findIndex(m => m.role === ROLES.SYSTEM);
-
-				if (systemMessageIndex !== -1) {
-					// Update existing system message
-					this.messages[systemMessageIndex].content = content;
-
-					// Update the DOM element directly if it exists
-					const contentEl = this.messages[systemMessageIndex].element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
-					if (contentEl) {
-						contentEl.textContent = content;
-					}
-
-					addedMessages.push(this.messages[systemMessageIndex]);
-					systemMessageUpdated = true;
-				} else {
-					// Create new system message and insert at beginning
-					const systemMessage = this.createMessage(
-						ROLES.SYSTEM,
-						// Step 2: Ensure new system message gets default characterId and visibility
-						// These will be picked up by createMessage's new default parameters.
-						content,
-					);
-					this.messages.unshift(systemMessage);
-					addedMessages.push(systemMessage);
-					systemMessageUpdated = true;
+				this.systemMessage.content = content;
+				const contentEl = this.systemMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+				if (contentEl) {
+					contentEl.textContent = content;
 				}
+				addedMessages.push(this.systemMessage);
+				systemMessageUpdated = true;
 				continue;
 			}
 
@@ -168,27 +133,33 @@ class ChatManager {
 				continue;
 			}
 
-			// If adding a non-empty user message and it's not the first one processed,
-			// remove the trailing empty user message if it exists
-			if (role === ROLES.USER && content !== '') {
-				const lastMessage = this.messages[this.messages.length - 1];
-				if (lastMessage && lastMessage.role === ROLES.USER && lastMessage.content === '') {
-					this.messages.pop();
+			// For RPStory: always append to existing assistant message
+			if (role === ROLES.ASSISTANT) {
+				if (this.storyMessage.content.trim() !== '') {
+					this.storyMessage.content += '\n\n' + content;
+				} else {
+					this.storyMessage.content = content;
 				}
+				// Update the DOM element directly if it exists
+				const contentEl = this.storyMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+				if (contentEl) {
+					contentEl.textContent = this.storyMessage.content;
+				}
+				addedMessages.push(this.storyMessage);
+				continue;
 			}
 
-			const newMessage = this.createMessage(
-				role,
-				// Step 2: Ensure new messages get default characterId and visibility if not specified
-				// These will be picked up by createMessage's new default parameters.
-				content,
-			);
-			this.messages.push(newMessage);
-			addedMessages.push(newMessage);
+			if (role === ROLES.USER) {
+				// For RPStory: if there is already a user message, just update it instead of creating new
+				this.promptMessage.content = content;
+				const contentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+				if (contentEl) {
+					contentEl.textContent = this.promptMessage.content;
+				}
+				addedMessages.push(this.promptMessage);
+				continue;
+			}
 		}
-
-		// Only ensure trailing user message and send notification once at the end
-		this._ensureTrailingUserMessage();
 
 		// Send a single notification
 		if (systemMessageUpdated) {
@@ -206,6 +177,27 @@ class ChatManager {
 		return this.addMessages([{ role, content }])[0] || null;
 	}
 
+	clear() {
+		this.systemMessage.content = 'You are a helpful assistant.';
+		const systemContentEl = this.systemMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (systemContentEl) {
+			systemContentEl.textContent = this.systemMessage.content;
+		}
+
+		this.storyMessage.content = '';
+		const storyContentEl = this.storyMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (storyContentEl) {
+			storyContentEl.textContent = this.storyMessage.content;
+		}
+
+		this.promptMessage.content = ''; // Usually the user clears it entirely or leaves a '?'? Empty string matches RPChat behavior prior to edit.
+		const promptContentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (promptContentEl) {
+			promptContentEl.textContent = this.promptMessage.content;
+		}
+		this._notifyUpdate();
+	}
+
 	/**
 	 * Callback handler for deleting a single message.
 	 * Passed to ChatMessage instances. System message cannot be deleted.
@@ -213,39 +205,35 @@ class ChatManager {
 	 * @param {string} messageId - The ID of the message to delete.
 	 */
 	handleDelete(messageId) {
-		const index = this.messages.findIndex(msg => msg.id === messageId);
-		if (index !== -1) {
-			// --- Enforce System Message Rule ---
-			if (index === 0 && this.messages[index].role === ROLES.SYSTEM) {
-				this.notificationHandler('System message cannot be deleted.', 'error');
-				return;
-			}
-			// Additional safety check (should be redundant due to above)
-			if (this.messages[index].role === ROLES.SYSTEM) {
-				this.notificationHandler('System message cannot be deleted.', 'error');
-				return;
-			}
-			// --- End System Message Enforcement ---
-			// Require confirmation from user before deleting
-			if (!confirm(`Are you sure you want to delete this message?`)) {
-				return;
-			}
+		if (messageId === this.systemMessage.id) {
+			this.notificationHandler('System message cannot be deleted.', 'error');
+			return;
+		}
 
-			this.messages.splice(index, 1);
+		// Require confirmation from user before deleting
+		if (!confirm(`Are you sure you want to delete this message?`)) {
+			return;
+		}
+
+		if (messageId === this.storyMessage.id) {
+			this.storyMessage.content = '';
+			const contentEl = this.storyMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+			if (contentEl) { contentEl.textContent = ''; }
 			this.notificationHandler('Message deleted.', 'success');
-
-			// --- Ensure Trailing User Message ---
-			this._ensureTrailingUserMessage(); // Add if needed
-			// --- End Trailing User Message ---
-
-			this.render();
-			if (this.onUpdate) {
-				this.onUpdate();
-			}
-			this._notifyUpdate(); // Notify that the message list has changed
+		} else if (messageId === this.promptMessage.id) {
+			this.promptMessage.content = '?';
+			const contentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+			if (contentEl) { contentEl.textContent = '?'; }
+			this.notificationHandler('Message deleted.', 'success');
 		} else {
 			this.notificationHandler('Could not find message to delete.', 'error');
+			return;
 		}
+
+		if (this.onUpdate) {
+			this.onUpdate();
+		}
+		this._notifyUpdate(); // Notify that the message list has changed
 	}
 
 	/**
@@ -256,35 +244,8 @@ class ChatManager {
 	 * @param {string} messageId - The ID of the message to delete from (inclusive).
 	 */
 	handleDeleteFromHere(messageId) {
-		let index = this.messages.findIndex(msg => msg.id === messageId);
-		if (index !== -1) {
-			index++; // Increment index to exclude the starting message
-			// --- Enforce System Message Rule ---
-			if (index === 0) {
-				this.notificationHandler('Cannot "delete from here" starting at the system message.', 'warning');
-				return;
-			}
-			// --- End System Message Enforcement ---
-			// require confirmation from user before deleting
-			if (!confirm(`Are you sure you want to delete all messages after this message?`)) {
-				return;
-			}
-			const deleteCount = this.messages.length - index;
-			this.messages.splice(index); // Remove from index to the end
-			this.notificationHandler(`${deleteCount} message(s) deleted from here.`, 'success');
-
-			// --- Ensure Trailing User Message ---
-			this._ensureTrailingUserMessage(); // Add if needed
-
-			this.render();
-			if (this.onUpdate) {
-				this.onUpdate();
-			}
-
-			this._notifyUpdate(); // Notify that the message list has changed
-		} else {
-			this.notificationHandler('Could not find starting message for deletion.', 'error');
-		}
+		// Method kept around by convention but should be unused moving forward as RPStory hides this button.
+		this.notificationHandler('Functionality disabled in RPStory.', 'warning');
 	}
 
 	/**
@@ -295,19 +256,17 @@ class ChatManager {
 	 */
 	getMessagesJSON() {
 		// Make a copy to potentially modify for export
-		let messagesToExport = [...this.messages];
+		let messagesToExport = [
+			{ role: this.systemMessage.role, content: this.systemMessage.content },
+			{ role: this.storyMessage.role, content: this.storyMessage.content }
+		];
 
 		// Check if the last message is an empty user message (added by _ensureTrailingUserMessage)
-		const lastMessage = messagesToExport[messagesToExport.length - 1];
-		if (lastMessage && lastMessage.role === ROLES.USER && lastMessage.content === '') {
-			// Remove it for the JSON output, as it's primarily for UI interaction state
-			messagesToExport.pop();
+		if (this.promptMessage.content !== '' && this.promptMessage.content !== '?') {
+			messagesToExport.push({ role: this.promptMessage.role, content: this.promptMessage.content });
 		}
 
-		return messagesToExport.map(message => ({
-			role: message.role,
-			content: message.content
-		}));
+		return messagesToExport;
 	}
 
 	/**
@@ -412,32 +371,39 @@ class ChatManager {
 			}
 			// --- End Validation ---
 
-			// 3. Clear existing messages (only after validation passes)
-			this.messages = [];
+			// 4. Flatten imported messages to RPStory format (1 System, 1 Assistant, 1 User)
+			let systemContent = 'You are a helpful assistant.';
+			let assistantContent = '';
+			let userContent = '';
 
-			// 4. Add messages from parsed data
 			parsedMessages.forEach(msgData => {
-				// Recreate ChatMessage instances
-				const newMessage = this.createMessage(
-					msgData.role,
-					msgData.content
-				);
-				this.messages.push(newMessage);
+				if (msgData.role === ROLES.SYSTEM) systemContent = msgData.content;
+				if (msgData.role === ROLES.ASSISTANT) {
+					// Append story chunks
+					if (assistantContent !== '') {
+						assistantContent += '\n\n' + msgData.content;
+					} else {
+						assistantContent = msgData.content;
+					}
+				}
+				if (msgData.role === ROLES.USER) {
+					// We can either keep the last user prompt or ignore past prompts.
+					// We'll keep the very last one as the current prompt.
+					userContent = msgData.content;
+				}
 			});
 
-			// --- Ensure System Message and Trailing User Message ---
-			if (this.messages.length === 0 || this.messages[0]?.role !== ROLES.SYSTEM) {
-				// Add default system message if none exists
-				const systemMessage = this.createMessage(
-					ROLES.SYSTEM,
-					// Step 2: Ensure default system message gets default characterId and visibility
-					// These will be picked up by createMessage's new default parameters.
-					'You are a helpful assistant.',
-				);
-				this.messages.unshift(systemMessage);
-			}
-			this._ensureTrailingUserMessage(); // Add trailing user message if needed
-			// --- End System Message and Trailing User Message ---
+			this.systemMessage.content = systemContent;
+			const sysContentEl = this.systemMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+			if (sysContentEl) { sysContentEl.textContent = systemContent; }
+
+			this.storyMessage.content = assistantContent;
+			const storyContentEl = this.storyMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+			if (storyContentEl) { storyContentEl.textContent = assistantContent; }
+
+			this.promptMessage.content = userContent;
+			const promptContentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+			if (promptContentEl) { promptContentEl.textContent = userContent; }
 
 			this.notificationHandler('Chat history loaded successfully.', 'success');
 
@@ -477,9 +443,9 @@ class ChatManager {
 		targetContainer.innerHTML = '';
 
 		// Render each message
-		this.messages.forEach(message => {
-			message.render(targetContainer);
-		});
+		this.systemMessage.render(targetContainer);
+		this.storyMessage.render(targetContainer);
+		this.promptMessage.render(targetContainer);
 	}
 
 	/**
@@ -499,8 +465,7 @@ class ChatManager {
 	 * @returns {string} The content of the system message.
 	 */
 	getSystemPrompt() {
-		// The system message is guaranteed to be the first element.
-		return this.messages[0]?.content || '';
+		return this.systemMessage.content;
 	}
 
 	/**
@@ -508,35 +473,27 @@ class ChatManager {
 	 * @param {string} newContent - The new content for the system prompt.
 	 */
 	updateSystemPrompt(newContent) {
-		// The system message is guaranteed to be the first element.
-		const systemMsg = this.messages[0];
-		if (systemMsg && systemMsg.role === ROLES.SYSTEM) {
-			systemMsg.content = newContent; // Update internal content
+		this.systemMessage.content = newContent; // Update internal content
 
-			// Update the DOM element directly if it exists
-			const contentEl = systemMsg.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
-			if (contentEl) {
-				contentEl.textContent = newContent;
-			}
-
-			this.notificationHandler('System prompt updated.', 'info');
-
-			// Note: Technically only content changed, not the structure.
-			// A full update notification might trigger a full re-render, which is slightly inefficient here.
-			// However, for simplicity, we notify of an update. A more complex system might have different notification types.
-			this._notifyUpdate();
-		} else {
-			// This case should theoretically not happen due to constructor enforcement
-			console.error("Could not find the system message to update.");
-			this.notificationHandler('Error updating system prompt.', 'error');
+		// Update the DOM element directly if it exists
+		const contentEl = this.systemMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (contentEl) {
+			contentEl.textContent = newContent;
 		}
+
+		this.notificationHandler('System prompt updated.', 'info');
+
+		// Note: Technically only content changed, not the structure.
+		// A full update notification might trigger a full re-render, which is slightly inefficient here.
+		// However, for simplicity, we notify of an update. A more complex system might have different notification types.
+		this._notifyUpdate();
 	}
 	/**
 	 * Checks if any message in the chat is currently being edited.
 	 * @returns {boolean} True if any message is being edited, false otherwise.
 	 */
 	hasActiveEdits() {
-		return this.messages.some(message => message.isBeingEdited());
+		return this.systemMessage.isBeingEdited() || this.storyMessage.isBeingEdited() || this.promptMessage.isBeingEdited();
 	}
 
 	/**
@@ -544,10 +501,6 @@ class ChatManager {
 	 * @returns {ChatMessage|null} The trailing user message or null if not found
 	 */
 	getTrailingUserMessage() {
-		const lastMessage = this.messages[this.messages.length - 1];
-		if (lastMessage && lastMessage.role === ROLES.USER) {
-			return lastMessage;
-		}
-		return null;
+		return this.promptMessage;
 	}
 }

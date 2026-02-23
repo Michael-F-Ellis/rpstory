@@ -96,16 +96,6 @@ class ChatMessage {
 			editBtn.addEventListener('click', () => this.startEditing());
 			controlsEl.appendChild(editBtn);
 		}
-
-
-		// Add delete-from-here button (only for user messages - remains unchanged)
-		if (this.role === ROLES.USER) {
-			const deleteFromHereBtn = document.createElement('button');
-			deleteFromHereBtn.className = `${CSS_CLASSES.ICON_BUTTON} delete-from-here`; // Using constant
-			deleteFromHereBtn.textContent = '⟲'; // Using textContent
-			deleteFromHereBtn.addEventListener('click', () => this.deleteFromHereCB(messageId));
-			controlsEl.appendChild(deleteFromHereBtn);
-		}
 	} // Start editing a message
 	startEditing() {
 		// get the content element. It's a child of this.element

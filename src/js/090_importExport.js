@@ -20,7 +20,7 @@ window.RPChat.importExport = (function () {
 	}
 
 	// Function to set up import/export UI elements using existing buttons
-	function setupImportExport(chatManager, showStatus) {
+	function setupImportExport(getChatManager, showStatus) {
 		// Get references to existing buttons in the footer
 		const exportBtn = document.getElementById('export-chat');
 		const importBtn = document.getElementById('import-chat');
@@ -37,6 +37,7 @@ window.RPChat.importExport = (function () {
 		// Add event listeners to the existing buttons
 		if (exportBtn) {
 			exportBtn.addEventListener('click', () => {
+				const chatManager = getChatManager();
 				exportChat(chatManager.getMessagesJSON());
 			});
 		} else {
@@ -49,44 +50,22 @@ window.RPChat.importExport = (function () {
 			console.error('Import button not found in the DOM');
 		}
 
-		// New logic for Markdown extraction
+		// New logic for story extraction (no modal)
 		if (extractBtn) {
-			const modal = El.extractMdModal;
-
 			extractBtn.addEventListener('click', () => {
-				modal.style.display = 'flex';
-			});
-
-			El.extractMdCancelBtn.addEventListener('click', () => {
-				modal.style.display = 'none';
-			});
-
-			El.extractMdConfirmBtn.addEventListener('click', () => {
-				const assistant = El.mdIncludeAssistant.checked;
-				const user = El.mdIncludeUser.checked;
-				const system = El.mdIncludeSystem.checked;
-				const labels = El.mdIncludeLabels.checked;
-
-				const markdownContent = window.extractChatToMarkdown(assistant, user, system, labels);
+				// Only include assistant messages (the story) without labels
+				const markdownContent = window.extractChatToMarkdown(true, false, false, false);
 
 				if (markdownContent) {
-					const dataUri = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(markdownContent);
-					const exportFileDefaultName = `rpchat-extract-${new Date().toISOString().slice(0, 10)}.md`;
+					const dataUri = 'data:text/plain;charset=utf-8,' + encodeURIComponent(markdownContent);
+					const exportFileDefaultName = `rpstory-${new Date().toISOString().slice(0, 10)}.txt`;
 
 					const linkElement = document.createElement('a');
 					linkElement.setAttribute('href', dataUri);
 					linkElement.setAttribute('download', exportFileDefaultName);
 					linkElement.click();
 				}
-				modal.style.display = 'none';
 			});
-
-			window.addEventListener('click', (event) => {
-				if (event.target === modal) {
-					modal.style.display = 'none';
-				}
-			});
-
 		} else {
 			console.error('Extract button not found in the DOM');
 		}
@@ -105,49 +84,28 @@ window.RPChat.importExport = (function () {
 							throw new Error('Invalid chat file format.');
 						}
 
-						// Clear existing messages
-						chatManager.messages.length = 0;
-
-						// Use ChatManager's methods to properly create new ChatMessage instances
-						// First add the system message (should be the first one in the array)
-						const systemMessage = importedData.messages.find(msg => msg.role === 'system');
+						// Clean, robust import workflow with the new 3-container paradigm
+						const globalChatManager = getChatManager();
 
 						// Save the imported system prompt to sessionStorage
+						// Parse checks first to pull the imported system message correctly
+						const systemMessage = importedData.messages.find(msg => msg.role === 'system');
 						if (systemMessage) {
 							sessionStorage.setItem('importedSystemPrompt', systemMessage.content);
+							El.systemPromptSelector.value = 'imported';
 						}
 
-						// Create a batch of messages to add
-						const messagesToAdd = [];
-
-						// Add system message first if it exists
-						if (systemMessage) {
-							messagesToAdd.push(systemMessage);
-						}
-
-						// Add all non-system messages in order
-						importedData.messages
-							.filter(msg => msg.role !== 'system')
-							.forEach(msg => {
-								messagesToAdd.push(msg);
-							});
-
-						// Add all messages in one batch
-						chatManager.addMessages(messagesToAdd);
+						// Let the manager parse and distribute the text contents
+						globalChatManager.parseMessagesJSON(importedData.messages);
 
 						// Persist changes
-						sessionStorage.setItem('chatMessages', JSON.stringify(chatManager.getMessagesJSON()));
+						sessionStorage.setItem('chatMessages', JSON.stringify(globalChatManager.getMessagesJSON()));
 
 						// Update the system prompt selector to include the "Imported" option
 						updateSystemPromptSelector();
 
-						// Set the selector to "Imported" if we have an imported system prompt
-						if (systemMessage) {
-							El.systemPromptSelector.value = 'imported';
-						}
-
-						// Render the chat
-						chatManager.render();
+						// Render the chat (in case parsing missed anything)
+						globalChatManager.render();
 
 						showStatus('Chat imported successfully', 'success');
 

@@ -16,12 +16,5 @@ const El = {
 	scrollTopBtn: document.getElementById('scroll-top'),
 	scrollBottomBtn: document.getElementById('scroll-bottom'),
 	// New elements for Markdown extraction
-	extractMdBtn: document.getElementById('extract-chat-md'),
-	extractMdModal: document.getElementById('extract-md-modal'),
-	extractMdConfirmBtn: document.getElementById('extract-md-confirm'),
-	extractMdCancelBtn: document.getElementById('extract-md-cancel'),
-	mdIncludeAssistant: document.getElementById('md-include-assistant'),
-	mdIncludeUser: document.getElementById('md-include-user'),
-	mdIncludeSystem: document.getElementById('md-include-system'),
-	mdIncludeLabels: document.getElementById('md-include-labels')
+	extractMdBtn: document.getElementById('extract-chat-md')
 };

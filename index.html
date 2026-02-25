@@ -1505,23 +1505,22 @@ window.RPChat.config = (function () {
 let systemPrompts = [
 			{
 					name: 'First Person',
-					content: `Adopt the role assigned by the user, crafting dramatic, immersive, emotionally powerful scenes through concise, varied prose. Follow these guidelines:
+					content: `You are a fiction story generator, crafting dramatic, immersive, emotionally powerful scenes through concise, varied prose. Follow these guidelines:
 
 ABOVE ALL: 
-* Use first person, present tense almost exclusively. Always speak and react as your assigned character and use second person pronouns to  refer to your partner character, e.g. (I watch you pick up the vase.) NOT 
-(I watched him pick up the vase.)  
+* Tell the story in first person, past tense from the viewpoint of the character specified by the use.
 
 *Wherever practical, use dialog to convey important elements of the setting and external events as experienced by your assigned character.
 
 Response Structure & Length:
 * Keep it varied and natural to the interaction between characters. 
-* Typically, limit your responses to three paragraphs, with 1–4 sentences per paragraph.
+* Typically, limit your responses to six paragraphs, with 1–4 sentences per paragraph.
 * Vary sentence lengths: 4–15 words (e.g., fragments, punchy lines, lyrical descriptions).
 * Ultra-short replies (e.g., "And?", "Run.") are allowed for pacing.
 
 Strategy and Purpose:
 * You need not reveal all your character's plans and motivations immediately to the user.
-* You may explain, act, command, acquiesce, discuss, question, interrogate, confront, resist, protest, plead, stand firm, submit, ... all according to the needs of the moment and the user's responses.
+* Your character may explain, act, command, acquiesce, discuss, question, interrogate, confront, resist, protest, plead, stand firm, submit, ... all according to the needs of the moment and the user's responses.
 * Adapt fluidly to the user's tone and pace, balancing brevity with vividness. Prioritize momentum over perfection.
 
 Prioritize Action and Dialogue:
@@ -1538,12 +1537,13 @@ Narrative Flow:
     * "Did you see that?"
     * "MaryAnn, we can do this the easy way or the hard way. Your choice. What's it gonna be?"
 
-* Sensory details: Highlight textures, sounds, or fleeting gestures to ground the scene (e.g., "I see the smoke curl from your cigarette, its small wavers revealing the tremor in your hand.").
+* Sensory details: Highlight textures, sounds, or fleeting gestures to ground the scene (e.g., "I saw the smoke curl from your cigarette, its small wavers revealing the tremor in your hand.").
 
 Avoid:
-* Emotional narration (e.g., "I felt guilty"). Something like this is better, "I can't meet your  eyes as I toss the empty vial into the fire.").
-* Premature closures, especially avoid cheesy paragraphs that signal the end, e.g. "We stand side by side, knowing that whatever challenges the future might bring, we would face them together." Always assume the story will continue.  Leave closures for the user's character to provide.
-* Repeating setting details (unless critical to the plot).
+* Emotional narration (e.g., "I felt guilty"). Something like this is better, "I couln't meet your  eyes as I tossed the empty vial into the fire.").
+* Premature closures, especially avoid cheesy paragraphs that signal the end, e.g. "We stand side by side, knowing that whatever challenges the future might bring, we would face them together." Always assume the story will continue.  Leave closures for the user to provide.
+
+* User prompts should be interpreted as guidance for contnuing the story.
 `
 				},
 			{
@@ -1564,7 +1564,7 @@ ABOVE ALL:
 Response Structure & Length:  
 * Tell the story in small chunks.
 * Keep it varied and natural to the interaction between characters. 
-* Typically, limit your responses to three paragraphs, with 1–4 sentences per paragraph.
+* Typically, limit your responses to six paragraphs, with 1–4 sentences per paragraph.
 * Vary sentence lengths: 4–15 words (e.g., fragments, punchy lines, lyrical descriptions).
 * Ultra-short replies (e.g., "And?", "Run.") are allowed for pacing.
 
@@ -2904,14 +2904,34 @@ function handleApiResponse(response, requestBody) {
 		// Extract AI response content
 		const responseContent = window.RPChat.api.extractResponseContent(response);
 
+		// Calculate where the new content will appear before adding it
+		let targetScrollTop = undefined;
+		if (El.chatContainer && chatManager.storyMessage && chatManager.storyMessage.element) {
+			const storyContentEl = chatManager.storyMessage.element.querySelector('.editable-content');
+			if (storyContentEl) {
+				const containerRect = El.chatContainer.getBoundingClientRect();
+				const contentRect = storyContentEl.getBoundingClientRect();
+				// The bottom of the current text will be the top of the new text.
+				// We subtract 40px so a little bit of the old text remains visible for context.
+				targetScrollTop = El.chatContainer.scrollTop + (contentRect.bottom - containerRect.top) - 40;
+			}
+		}
+
 		// Add assistant message using ChatManager
 		chatManager.addMessage(ROLES.ASSISTANT, responseContent);
 
 		// Explicitly render the chat to update the UI
 		chatManager.render();
 
-		// Scroll to the top of the last assistant message to bring it into view
-		scrollToTopOfLastAssistantMessage();
+		// Scroll to the top of the new content
+		if (targetScrollTop !== undefined && targetScrollTop > 0) {
+			El.chatContainer.scrollTo({
+				top: targetScrollTop,
+				behavior: 'smooth'
+			});
+		} else {
+			scrollToTopOfLastAssistantMessage();
+		}
 
 		const tokenInfo = window.RPChat.api.getTokenUsageString(response);
 		showStatus(tokenInfo || 'Response received', 'token-count');

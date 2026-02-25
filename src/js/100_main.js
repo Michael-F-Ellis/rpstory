@@ -963,14 +963,34 @@ function handleApiResponse(response, requestBody) {
 		// Extract AI response content
 		const responseContent = window.RPChat.api.extractResponseContent(response);
 
+		// Calculate where the new content will appear before adding it
+		let targetScrollTop = undefined;
+		if (El.chatContainer && chatManager.storyMessage && chatManager.storyMessage.element) {
+			const storyContentEl = chatManager.storyMessage.element.querySelector('.editable-content');
+			if (storyContentEl) {
+				const containerRect = El.chatContainer.getBoundingClientRect();
+				const contentRect = storyContentEl.getBoundingClientRect();
+				// The bottom of the current text will be the top of the new text.
+				// We subtract 40px so a little bit of the old text remains visible for context.
+				targetScrollTop = El.chatContainer.scrollTop + (contentRect.bottom - containerRect.top) - 40;
+			}
+		}
+
 		// Add assistant message using ChatManager
 		chatManager.addMessage(ROLES.ASSISTANT, responseContent);
 
 		// Explicitly render the chat to update the UI
 		chatManager.render();
 
-		// Scroll to the top of the last assistant message to bring it into view
-		scrollToTopOfLastAssistantMessage();
+		// Scroll to the top of the new content
+		if (targetScrollTop !== undefined && targetScrollTop > 0) {
+			El.chatContainer.scrollTo({
+				top: targetScrollTop,
+				behavior: 'smooth'
+			});
+		} else {
+			scrollToTopOfLastAssistantMessage();
+		}
 
 		const tokenInfo = window.RPChat.api.getTokenUsageString(response);
 		showStatus(tokenInfo || 'Response received', 'token-count');

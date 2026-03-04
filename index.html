@@ -485,7 +485,7 @@ footer {
 				<h1>RPChat</h1>
 				<div class="header-info">
 					<p>
-						v1.0.9&nbsp
+						v1.0.10&nbsp
 						<a href="https://github.com/michael-f-ellis/rpchat" class="header-link" target="_blank">Source
 							code</a>
 					</p>
@@ -897,6 +897,18 @@ class ChatManager {
 		if (typeof this.onUpdate === 'function') {
 			this.onUpdate();
 		}
+	}
+
+	/**
+	 * Clears the content of the trailing user prompt.
+	 */
+	clearPrompt() {
+		this.promptMessage.content = '?';
+		const contentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (contentEl) {
+			contentEl.textContent = '?';
+		}
+		this._notifyUpdate();
 	}
 
 	/**
@@ -2917,8 +2929,17 @@ function handleApiResponse(response, requestBody) {
 			}
 		}
 
+		// Merge user prompt into story if it's not a dummy '?' or empty
+		const currentPrompt = chatManager.getTrailingUserMessage().content;
+		if (currentPrompt && currentPrompt !== '?') {
+			chatManager.addMessage(ROLES.ASSISTANT, currentPrompt);
+		}
+
 		// Add assistant message using ChatManager
 		chatManager.addMessage(ROLES.ASSISTANT, responseContent);
+
+		// Clear the prompt area
+		chatManager.clearPrompt();
 
 		// Explicitly render the chat to update the UI
 		chatManager.render();
@@ -2972,8 +2993,8 @@ function handleClearChat() {
 		sessionStorage.removeItem('chatMessages');
 
 		chatManager._notifyUpdate();
-		showStatus('Chat cleared');
 	}
+	showStatus('Chat cleared');
 }
 
 // Show status message and use as notification handler for ChatManager

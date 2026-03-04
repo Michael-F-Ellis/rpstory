@@ -976,8 +976,17 @@ function handleApiResponse(response, requestBody) {
 			}
 		}
 
+		// Merge user prompt into story if it's not a dummy '?' or empty
+		const currentPrompt = chatManager.getTrailingUserMessage().content;
+		if (currentPrompt && currentPrompt !== '?') {
+			chatManager.addMessage(ROLES.ASSISTANT, currentPrompt);
+		}
+
 		// Add assistant message using ChatManager
 		chatManager.addMessage(ROLES.ASSISTANT, responseContent);
+
+		// Clear the prompt area
+		chatManager.clearPrompt();
 
 		// Explicitly render the chat to update the UI
 		chatManager.render();
@@ -1031,8 +1040,8 @@ function handleClearChat() {
 		sessionStorage.removeItem('chatMessages');
 
 		chatManager._notifyUpdate();
-		showStatus('Chat cleared');
 	}
+	showStatus('Chat cleared');
 }
 
 // Show status message and use as notification handler for ChatManager

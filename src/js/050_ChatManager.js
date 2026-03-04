@@ -86,6 +86,18 @@ class ChatManager {
 	}
 
 	/**
+	 * Clears the content of the trailing user prompt.
+	 */
+	clearPrompt() {
+		this.promptMessage.content = '?';
+		const contentEl = this.promptMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
+		if (contentEl) {
+			contentEl.textContent = '?';
+		}
+		this._notifyUpdate();
+	}
+
+	/**
 	 * Adds multiple messages at once, minimizing UI updates and notifications.
 	 * @param {Array<{role: string, content: string}|Array<string, string>>} messages - Array of message objects or [role, content] arrays
 	 * @returns {Array<ChatMessage>} Array of the newly created ChatMessage instances

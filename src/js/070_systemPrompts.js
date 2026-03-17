@@ -56,25 +56,13 @@ function getCurrentSystemPrompt() {
 
 // Function to update the system prompt when selector changes
 function updateSystemPrompt() {
-	if (!chatManager) return;
-
-	const newSystemPrompt = getCurrentSystemPrompt();
-
 	// Save the selected system prompt option to sessionStorage
-	sessionStorage.setItem('selectedSystemPrompt', El.systemPromptSelector.value);
-
-	// Update the system message in the chat manager
-	const messages = chatManager.messages;
-	if (messages.length > 0 && messages[0].role === 'system') {
-		messages[0].content = newSystemPrompt; // Update internal content
-
-		// Update the DOM element
-		const contentEl = messages[0].element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
-		if (contentEl) {
-			contentEl.textContent = newSystemPrompt;
-		}
-	}
-
-	// Trigger chat update to save changes
-	chatManager._notifyUpdate();
+    if (El.systemPromptSelector) {
+	    sessionStorage.setItem('selectedSystemPrompt', El.systemPromptSelector.value);
+    }
+    
+    // In SingleText mode, we don't have a visible system message to update in the editor.
+    // The processor will pick up the current selection when it calls getCurrentSystemPrompt().
+    
+	showStatus(`System prompt updated to: ${systemPrompts[El.systemPromptSelector.value]?.name || 'Imported'}`);
 }

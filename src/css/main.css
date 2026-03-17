@@ -239,7 +239,7 @@ button:disabled {
 	opacity: 0.7;
 }
 
-.chat-container {
+.chat-container, .story-editor {
 	max-height: 70vh;
 	flex: 1;
 	display: flex;
@@ -249,6 +249,42 @@ button:disabled {
 	border: 1px solid #ddd;
 	border-radius: 5px;
 	margin-bottom: 1rem;
+}
+
+.story-editor {
+    display: block;
+    background-color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.1rem;
+    line-height: 1.5;
+}
+
+.prompt-highlight {
+    background-color: rgba(128, 90, 213, 0.15);
+    border-bottom: 2px solid var(--highlight-color);
+    font-weight: bold;
+    color: #553c9a;
+    border-radius: 2px;
+}
+
+.background-highlight {
+    background-color: rgba(49, 130, 206, 0.08);
+    border: 1px dashed #3182ce;
+    font-style: italic;
+    color: #2b6cb0;
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.active-prompt {
+    background-color: #fbd38d !important;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 }
 
 .message {

@@ -1,12 +1,16 @@
 // Main application code for RPChat using ChatManager and ChatMessage components
 
 // Define state variables
+window.RPChat = window.RPChat || {};
 let apiKeys = {};
 let currentProvider = null;
 let selectedModelId = null;
 let temperature = null;
 let isProcessing = false;
-let chatManager = null;
+let storyManager = null;
+let processor = null;
+
+const MARGIN = 20; // Example, but let's just remove the block
 
 /**
  * Extracts the current chat to a Markdown formatted string.
@@ -17,43 +21,20 @@ let chatManager = null;
  * @param {boolean} [labels=false] - Add role labels to each message.
  * @returns {string} The chat content in Markdown format.
  */
-window.extractChatToMarkdown = function (assistant = true, user = true, system = false, labels = false) {
-	if (!chatManager) {
-		console.error("ChatManager not initialized.");
-		return "Error: ChatManager not found.";
+window.extractChatToMarkdown = function () {
+	if (!storyManager) {
+		console.error("StoryManager not initialized.");
+		return "Error: StoryManager not found.";
 	}
 
-	// Filter out the trailing empty user message
-	const messagesToExport = chatManager.getMessagesJSON();
-
-	let markdown = '';
-
-	messagesToExport.forEach(message => {
-		let include = false;
-		if (assistant && message.role === ROLES.ASSISTANT) {
-			include = true;
-		}
-		if (user && message.role === ROLES.USER && message.content) { // Exclude empty user messages
-			include = true;
-		}
-		if (system && message.role === ROLES.SYSTEM) {
-			include = true;
-		}
-
-		if (include) {
-			if (labels) {
-				markdown += `**${message.role.charAt(0).toUpperCase() + message.role.slice(1)}:** `;
-			}
-			markdown += `${message.content.trim()}\n\n`;
-		}
-	});
+	const markdown = storyManager.getContent();
 
 	// For easy copying, log to console, copy to clipboard, and return
 	console.log(markdown);
 	if (navigator.clipboard) {
 		navigator.clipboard.writeText(markdown).then(() => {
 			if (typeof showStatus === 'function') {
-				showStatus('Chat copied to clipboard', 'success');
+				showStatus('Story copied to clipboard', 'success');
 			}
 		}).catch(err => {
 			console.error('Failed to copy to clipboard:', err);
@@ -330,7 +311,7 @@ function initDB() {
 
 
 // Initialize application
-async function init() { // Load saved state from sessionStorage
+async function initializeApp() { 
 	try {
 		await initDB();
 	} catch (error) {
@@ -341,221 +322,21 @@ async function init() { // Load saved state from sessionStorage
 	// Set up UI elements based on configuration
 	initializeUIElements();
 
-	// Initialize ChatManager with system prompt
-	initializeChatManager();
-	window.RPChat.chatManager = chatManager;
+	// Initialize StoryManager
+	storyManager = new StoryManager(El.storyEditor, () => {
+        // Save to storage on every update (debounced if needed, but StoryManager does it)
+        sessionStorage.setItem('storyContent', storyManager.getContent());
+    });
+	window.RPChat.storyManager = storyManager;
 
-	window.testProviderDBInterface = async function () {
-		console.log("=== Testing Provider DB Interface ===");
+    // Load saved story content
+    const savedStory = sessionStorage.getItem('storyContent');
+    if (savedStory) {
+        storyManager.setContent(savedStory);
+    }
 
-		try {
-			// 0. Save a copy of the DB
-			console.log("Step 0: Saving DB backup...");
-			const dbBackup = await backupDB();
-			console.log("DB backup completed");
-
-			// 1. Delete and recreate the DB
-			console.log("Step 1: Recreating DB...");
-			await deleteDB();
-			await initDB();
-			console.log("DB recreated");
-
-			let testResults = [];
-
-			// 2. Loop over the Providers in RPChat.config.PROVIDERS
-			console.log("Step 2: Testing providers...");
-			for (const [providerId, originalProvider] of window.RPChat.config.PROVIDERS) {
-				console.log(`Testing provider: ${providerId}`);
-
-				// Copy the provider and empty the models field
-				const providerCopy = { ...originalProvider };
-				const originalModels = [...providerCopy.models];
-				providerCopy.models = []; // Empty models for provider creation
-
-				try {
-					// Create the provider in the DB using the copy
-					await window.createProvider(providerCopy);
-					console.log(`  Provider ${providerId} created`);
-
-					// Create the models in the DB using the original provider's models
-					for (const model of originalModels) {
-						await window.createModel(providerId, model);
-					}
-					console.log(`  ${originalModels.length} models created for provider ${providerId}`);
-
-					// 3. Read the provider from the DB
-					const readProvider = await window.readProvider(providerId);
-					if (!readProvider) {
-						throw new Error(`Failed to read provider ${providerId} from DB`);
-					}
-
-					// Compare the read provider with the original
-					const comparison = compareProviders(originalProvider, readProvider);
-					testResults.push({
-						providerId,
-						success: comparison.success,
-						differences: comparison.differences
-					});
-
-					if (comparison.success) {
-						console.log(`  ✅ Provider ${providerId} test PASSED`);
-					} else {
-						console.log(`  ❌ Provider ${providerId} test FAILED:`);
-						comparison.differences.forEach(diff => console.log(`    ${diff}`));
-					}
-
-				} catch (error) {
-					console.error(`  ❌ Error testing provider ${providerId}:`, error);
-					testResults.push({
-						providerId,
-						success: false,
-						error: error.message
-					});
-				}
-			}
-
-			// 4. Delete the DB
-			console.log("Step 4: Cleaning up test DB...");
-			await deleteDB();
-
-			// 5. Restore DB from saved copy
-			console.log("Step 5: Restoring DB from backup...");
-			await restoreDB(dbBackup);
-			console.log("DB restored");
-
-			// Report final results
-			const successCount = testResults.filter(r => r.success).length;
-			const totalCount = testResults.length;
-
-			console.log("=== TEST RESULTS SUMMARY ===");
-			console.log(`Total providers tested: ${totalCount}`);
-			console.log(`Successful tests: ${successCount}`);
-			console.log(`Failed tests: ${totalCount - successCount}`);
-
-			if (successCount === totalCount) {
-				console.log("🎉 ALL TESTS PASSED!");
-				return "✅ All provider DB interface tests passed!";
-			} else {
-				console.log("❌ Some tests failed. Check detailed results above.");
-				return `❌ ${totalCount - successCount} tests failed. Check console for details.`;
-			}
-
-		} catch (error) {
-			console.error("❌ Test execution failed:", error);
-			return `❌ Test execution failed: ${error.message}`;
-		}
-	};
-
-	// Helper function to backup the entire database
-	async function backupDB() {
-		const backup = {
-			providers: [],
-			models: []
-		};
-
-		return new Promise((resolve, reject) => {
-			const transaction = db.transaction(['providers', 'models'], 'readonly');
-			const providerStore = transaction.objectStore('providers');
-			const modelStore = transaction.objectStore('models');
-
-			// Backup providers
-			const providerRequest = providerStore.getAll();
-			providerRequest.onsuccess = () => {
-				backup.providers = providerRequest.result;
-
-				// Backup models
-				const modelRequest = modelStore.getAll();
-				modelRequest.onsuccess = () => {
-					backup.models = modelRequest.result;
-					resolve(backup);
-				};
-				modelRequest.onerror = () => reject(modelRequest.error);
-			};
-			providerRequest.onerror = () => reject(providerRequest.error);
-		});
-	}
-
-	// Helper function to delete the database
-	async function deleteDB() {
-		return new Promise((resolve, reject) => {
-			if (db) {
-				db.close();
-			}
-			const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
-			deleteRequest.onsuccess = () => resolve();
-			deleteRequest.onerror = () => reject(deleteRequest.error);
-		});
-	}
-
-	// Helper function to restore database from backup
-	async function restoreDB(backup) {
-		// First ensure DB is initialized
-		await initDB();
-
-		return new Promise((resolve, reject) => {
-			const transaction = db.transaction(['providers', 'models'], 'readwrite');
-			const providerStore = transaction.objectStore('providers');
-			const modelStore = transaction.objectStore('models');
-
-			// Restore providers
-			for (const provider of backup.providers) {
-				providerStore.put(provider);
-			}
-
-			// Restore models
-			for (const model of backup.models) {
-				modelStore.put(model);
-			}
-
-			transaction.oncomplete = () => resolve();
-			transaction.onerror = () => reject(transaction.error);
-		});
-	}
-
-	// Helper function to compare providers
-	function compareProviders(original, fromDB) {
-		const differences = [];
-
-		// Check basic fields
-		const fieldsToCheck = ['id', 'displayName', 'apiFormat', 'endpoint'];
-		for (const field of fieldsToCheck) {
-			if (original[field] !== fromDB[field]) {
-				differences.push(`${field}: expected '${original[field]}', got '${fromDB[field]}'`);
-			}
-		}
-
-		// Check models array
-		if (!Array.isArray(fromDB.models)) {
-			differences.push(`models: expected array, got ${typeof fromDB.models}`);
-		} else {
-			if (original.models.length !== fromDB.models.length) {
-				differences.push(`models length: expected ${original.models.length}, got ${fromDB.models.length}`);
-			} else {
-				// Sort both arrays by ID to ensure consistent comparison
-				const origModelsSorted = [...original.models].sort((a, b) => a.id.localeCompare(b.id));
-				const dbModelsSorted = [...fromDB.models].sort((a, b) => a.id.localeCompare(b.id));
-
-				// Check each model
-				for (let i = 0; i < origModelsSorted.length; i++) {
-					const origModel = origModelsSorted[i];
-					const dbModel = dbModelsSorted[i];
-
-					const modelFields = ['id', 'displayName', 'defaultTemperature'];
-					for (const field of modelFields) {
-						if (origModel[field] !== dbModel[field]) {
-							differences.push(`model '${origModel.id}' ${field}: expected '${origModel[field]}', got '${dbModel[field]}'`);
-						}
-					}
-				}
-			}
-		}
-
-		return {
-			success: differences.length === 0,
-			differences
-		};
-	}
-	console.log("Test function added! Run window.testProviderDBInterface() in console to test.");
+    // Initialize Processor
+    processor = new IterativePromptProcessor(window.RPChat.api, window.RPChat.config);
 
 	// Attach event listeners
 	attachEventListeners();
@@ -565,14 +346,12 @@ async function init() { // Load saved state from sessionStorage
 
 	// Show initialization status
 	showStatus('Application initialized');
-
 }
 
 // Set up import/export functionality
 function initImportExport() {
 	// Set up the import/export functionality
 	RPChat.importExport.setupImportExport(
-		() => chatManager,               // Pass a getter for the entire chatManager object
 		showStatus                       // Function to show status messages
 	);
 }
@@ -593,7 +372,6 @@ function loadStateFromStorage() {
 		currentProvider = sessionStorage.getItem('apiProvider') || fp;
 
 		selectedModelId = sessionStorage.getItem('selectedModelId') || fm;
-		null;
 		temperature = sessionStorage.getItem('temperature') ?
 			parseFloat(sessionStorage.getItem('temperature')) :
 			tmp;
@@ -631,71 +409,7 @@ function initializeUIElements() {
 	}
 }
 
-// Initialize ChatManager
-function initializeChatManager() {
 
-	// Create ChatManager with system prompt and notification handler
-	chatManager = new ChatManager(
-		getCurrentSystemPrompt(),
-		showStatus,
-		El.chatContainer,
-		onChatUpdate
-	);
-	window.RPChat.chatManager = chatManager;
-
-	// Try to load saved messages from sessionStorage
-	try {
-		const savedMessages = sessionStorage.getItem('chatMessages');
-		if (savedMessages) {
-			chatManager.parseMessagesJSON(savedMessages);
-		}
-	} catch (error) {
-		console.error('Error loading saved messages:', error);
-		showStatus('Failed to load saved chat messages', 'error');
-	}
-
-	// Render the chat
-	chatManager.render();
-
-	// Scroll to the bottom to show messages
-	scrollToBottom();
-}
-
-// Callback for when chat is updated
-function onChatUpdate() {
-	// Save messages to sessionStorage
-	const messagesJSON = chatManager.getMessagesJSON();
-	sessionStorage.setItem('chatMessages', JSON.stringify(messagesJSON));
-
-	// Enable/disable send button based on edit state and content
-	updateSendButtonState();
-}
-
-// Update send button state based on trailing message state
-function updateSendButtonState() {
-	if (!El.sendButton) return;
-
-	const trailingMessage = chatManager.getTrailingUserMessage();
-
-	// Disable send button if:
-	// 1. Any message is being edited (besides trailing user message)
-	// 2. The trailing message doesn't exist, is empty, or not being/just been edited
-	const hasClosedEmptyFinalPrompt = trailingMessage && !trailingMessage.isBeingEdited() && trailingMessage.content.trim() === '';
-
-	const hasOtherActiveEdits = chatManager.messages.some(message => message !== trailingMessage && message.isBeingEdited());
-
-	if (hasOtherActiveEdits) {
-		El.sendButton.disabled = true;
-		El.sendLabel.textContent = "One or more messages are being edited";
-	} else if (hasClosedEmptyFinalPrompt) {
-		El.sendButton.disabled = true;
-		El.sendLabel.textContent = "Final prompt is empty";
-	}
-	else {
-		El.sendButton.disabled = false;
-		El.sendLabel.textContent = "Ready"
-	}
-}
 
 // Populate provider selector dropdown
 function populateProviderSelector() {
@@ -774,10 +488,10 @@ function attachEventListeners() {
 	El.temperatureInput.addEventListener('input', debounce(handleTemperatureChange, 300));
 
 	// Send button
-	El.sendButton.addEventListener('click', handleSendMessage);
+	El.sendButton.addEventListener('click', handleProcessStory);
 
-	// Clear chat
-	El.clearChatBtn.addEventListener('click', handleClearChat);
+	// Clear story
+	El.clearStoryBtn.addEventListener('click', handleClearStory);
 
 	// Scroll buttons
 	if (El.scrollTopBtn) {
@@ -795,23 +509,8 @@ function attachEventListeners() {
 		});
 	}
 
-	// Add a mutation observer to detect changes to the chat container
-	// This helps update the send button state when edits start/end
-	if (El.chatContainer) {
-		const observer = new MutationObserver(() => {
-			updateSendButtonState();
-		});
-		observer.observe(El.chatContainer, {
-			subtree: true,
-			childList: true,
-			attributes: true,
-			attributeFilter: ['contenteditable']
-		});
-	}
-
-	// Initial button state
-	updateSendButtonState();
-
+	// Initial button state (could be simplified)
+    if (El.sendButton) El.sendButton.disabled = false;
 }
 
 // Handle provider change
@@ -876,178 +575,61 @@ function handleTemperatureChange(event) {
 }
 
 // Handle send button click
-function handleSendMessage() {
-	const trailingMessage = chatManager.getTrailingUserMessage();
+// Handle send button click - Unified for SingleText mode
+async function handleProcessStory() {
+    if (isProcessing) return;
 
-	// Check if any message is being edited (other than the trailing one)
-	const hasOtherActiveEdits = chatManager.messages.some(message => message !== trailingMessage && message.isBeingEdited());
+    const storyText = storyManager.getContent();
+    
+    // Check for syntax errors first
+    const { prompts, errors } = processor.parseStory(storyText);
+    if (errors.length > 0) {
+        showStatus(errors.join('\n'), 'error');
+        return;
+    }
 
-	if (hasOtherActiveEdits) {
-		showStatus('Please save or cancel any active edits before sending', 'error');
-		return;
-	}
+    const provider = getProvider();
+    const apiKey = apiKeys[provider.apiKeyName];
+    if (!apiKey) {
+        showStatus('Please enter and save an API key first', 'error');
+        return;
+    }
 
-	if (!trailingMessage || trailingMessage.content.trim() === '') {
-		showStatus('Please enter a message before sending', 'error');
-		return;
-	}
+    // Start processing
+    isProcessing = true;
+    El.sendButton.disabled = true;
+    showStatus('Processing story...');
 
-	// If the trailing message is still in edit mode, save it first
-	if (trailingMessage.isBeingEdited()) {
-		trailingMessage.saveEdit();
-	}
+    const options = {
+        provider: currentProvider,
+        model: selectedModelId,
+        temperature: temperature,
+        systemPrompt: getCurrentSystemPrompt(),
+        apiKey: apiKey
+    };
 
-	sendMessage(trailingMessage.content);
-}
+    const onProgress = (data) => {
+        // Update story editor with changes
+        storyManager.setContent(data.updatedText);
+        showStatus(`Processed prompt. ${data.response.length} chars added.`, 'success');
+    };
 
-// Send message to API
-function sendMessage(content) {
-	if (isProcessing) return;
+    const onTotalError = (err) => {
+        isProcessing = false;
+        El.sendButton.disabled = false;
+        showStatus(err, 'error');
+    };
 
-	if (!content || content.trim() === '') {
-		showStatus('Cannot send empty message', 'error');
-		return;
-	}
+    if (prompts.length > 0) {
+        await processor.processPrompts(storyText, options, onProgress, onTotalError);
+    } else {
+        // Continue from end logic
+        await processor.continueStory(storyText, options, onProgress, onTotalError);
+    }
 
-	const provider = getProvider();
-	const apiKey = apiKeys[provider.apiKeyName];
-
-	if (!apiKey) {
-		showStatus('Please enter and save an API key first', 'error');
-		return;
-	}
-
-	// Start processing
-	isProcessing = true;
-	El.sendButton.disabled = true;
-	showStatus('Processing...');
-
-	// Get messages for API (ChatManager gives us properly formatted messages)
-	const apiMessages = chatManager.getMessagesJSON();
-
-	// Call API
-	callAPI(apiMessages);
-}
-
-// Call AI provider API
-function callAPI(apiMessages) {
-	const provider = getProvider();
-	const apiKey = apiKeys[provider.apiKeyName];
-	// Start the timer when API call begins
-	const startTime = Date.now();
-	const timerInterval = setInterval(() => {
-		if (!isProcessing) {
-			clearInterval(timerInterval);
-			return;
-		}
-		const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-		El.sendLabel.textContent = `Waiting for response... ${elapsedSeconds.toString().padStart(2, '0')}`;
-	}, 1000);
-
-	// Prepare request body
-	const requestBody = provider.prepareRequestBody(
-		selectedModelId,
-		apiMessages,
-		null, // use default max tokens
-		temperature
-	);
-
-	// Prepare endpoint and make API call
-	let endpoint = provider.endpoint;
-	if (provider.apiFormat === 'gemini-native') {
-		// Replace {{model}} placeholder with actual model ID
-		endpoint = endpoint.replace('{{model}}', selectedModelId);
-		// Add API key as URL parameter
-		endpoint += `?key=${apiKey}`;
-
-		// Make API call without authorization header for Gemini
-		window.RPChat.api.sendGeminiRequest(
-			endpoint,
-			requestBody,
-			(response) => handleApiResponse(response, requestBody),
-			handleApiError
-		);
-	} else {
-		// Use standard OpenAI-compatible API
-		window.RPChat.api.sendRequest(
-			endpoint,
-			apiKey,
-			requestBody,
-			(response) => handleApiResponse(response, requestBody),
-			handleApiError
-		);
-	}
-}
-
-// Handle successful API response
-function handleApiResponse(response, requestBody) {
-	isProcessing = false;
-	El.sendButton.disabled = false;
-
-	try {
-		// Check finish_reason and log if not 'stop'
-		let finishReason = null;
-
-		// For Gemini native API format:
-		if (response.candidates && response.candidates[0] && response.candidates[0].finishReason) {
-			finishReason = response.candidates[0].finishReason;
-		}
-		// For OpenAI/Together.ai standard format:
-		else if (response.choices && response.choices[0] && response.choices[0].finish_reason) {
-			finishReason = response.choices[0].finish_reason;
-		}
-
-		if (finishReason && finishReason !== 'STOP' && finishReason !== 'stop') {
-			console.log('Non-stop finish_reason detected:', finishReason);
-			console.log('Request body:', requestBody);
-		}
-
-		// Extract AI response content
-		const responseContent = window.RPChat.api.extractResponseContent(response);
-
-		// Calculate where the new content will appear before adding it
-		let targetScrollTop = undefined;
-		if (El.chatContainer && chatManager.storyMessage && chatManager.storyMessage.element) {
-			const storyContentEl = chatManager.storyMessage.element.querySelector('.editable-content');
-			if (storyContentEl) {
-				const containerRect = El.chatContainer.getBoundingClientRect();
-				const contentRect = storyContentEl.getBoundingClientRect();
-				// The bottom of the current text will be the top of the new text.
-				// We subtract 40px so a little bit of the old text remains visible for context.
-				targetScrollTop = El.chatContainer.scrollTop + (contentRect.bottom - containerRect.top) - 40;
-			}
-		}
-
-		// Merge user prompt into story if it's not a dummy '?' or empty
-		const currentPrompt = chatManager.getTrailingUserMessage().content;
-		if (currentPrompt && currentPrompt !== '?') {
-			chatManager.addMessage(ROLES.ASSISTANT, currentPrompt);
-		}
-
-		// Add assistant message using ChatManager
-		chatManager.addMessage(ROLES.ASSISTANT, responseContent);
-
-		// Clear the prompt area
-		chatManager.clearPrompt();
-
-		// Explicitly render the chat to update the UI
-		chatManager.render();
-
-		// Scroll to the top of the new content
-		if (targetScrollTop !== undefined && targetScrollTop > 0) {
-			El.chatContainer.scrollTo({
-				top: targetScrollTop,
-				behavior: 'smooth'
-			});
-		} else {
-			scrollToTopOfLastAssistantMessage();
-		}
-
-		const tokenInfo = window.RPChat.api.getTokenUsageString(response);
-		showStatus(tokenInfo || 'Response received', 'token-count');
-	} catch (error) {
-		handleApiError(error);
-	}
+    isProcessing = false;
+    El.sendButton.disabled = false;
+    showStatus('Story development complete.', 'success');
 }
 
 // Handle API errors
@@ -1057,71 +639,30 @@ function handleApiError(error) {
 
 	console.error('API Error:', error);
 
-	// Create app message for error
-	chatManager.addMessage(ROLES.APP, `Error: ${error.message || 'Unknown error occurred'}`);
+	// Show status message for error
+	showStatus(`Error: ${error.message || 'Unknown error occurred'}`, 'error');
 
-	// Explicitly render the chat to update the UI
-	chatManager.render();
-
-	// Scroll to the bottom to show new message
+	// Scroll to the bottom to show status if needed
 	scrollToBottom();
-
-	showStatus('Error occurred while calling API', 'error');
 }
 
-// Handle clear chat button
-function handleClearChat() {
-	if (confirm('Are you sure you want to clear the chat history?')) {
-		// Reset system prompt selector to first option
-		El.systemPromptSelector.selectedIndex = 0;
-
-		// Clear the 3 containers directly using ChatManager's new method
-		chatManager.clear();
-
-		// Clear sessionStorage (except system prompt and settings)
-		sessionStorage.removeItem('chatMessages');
-
-		chatManager._notifyUpdate();
+// Handle clear story button
+function handleClearStory() {
+	if (confirm('Are you sure you want to clear the story text?')) {
+		storyManager.setContent('');
+		sessionStorage.removeItem('storyContent');
 	}
-	showStatus('Chat cleared');
+	showStatus('Story cleared');
 }
 
 // Show status message and use as notification handler for ChatManager
+// Utility function to show status messages and use as notification handler for ChatManager
 function showStatus(message, type = 'info') {
 	if (!El.statusMessage) return;
 	console.log('status message:', message)
 
 	El.statusMessage.textContent = message;
 	El.statusMessage.className = type;
-
-	/*
-	// Leave the message visible for token counts and error
-	if (type == 'error' || type=='token-count') {
-		return;
-	}
-	// Otherwise, auto-clear after a delay
-	let timeout = 10000;
-	if (type === 'success') {
-		timeout = 500; // just a quick acknowledgement
-	}
-	setTimeout(() => {
-		if (El.statusMessage) {
-			El.statusMessage.textContent = '';
-			El.statusMessage.className = '';
-			console.log('status message cleared')
-		}
-	}, timeout);
-	*/
-}
-
-// Initialize the application
-function initializeApp() {
-	// Wait for DOM to be fully loaded
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', init);
-	} else {
-		init();
-	}
 }
 
 // Header toggle functionality
@@ -1169,35 +710,21 @@ function initHeaderToggle() {
 	setInitialHeaderState();
 }
 
-// Initialize header toggle
-initHeaderToggle();
+try {
+    // Initialize header toggle
+    initHeaderToggle();
 
-// Call initialization
-initializeApp();
-
-// Utility function to scroll to the top of the last assistant message
-function scrollToTopOfLastAssistantMessage() {
-	if (El.chatContainer) {
-		const assistantMessages = El.chatContainer.querySelectorAll('.assistant-message');
-		if (assistantMessages.length > 0) {
-			const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-			const containerRect = El.chatContainer.getBoundingClientRect();
-			const messageRect = lastAssistantMessage.getBoundingClientRect();
-
-			// Calculate the scroll amount needed to bring the message's top to the container's top.
-			const scrollAmount = El.chatContainer.scrollTop + (messageRect.top - containerRect.top);
-
-			El.chatContainer.scrollTo({
-				top: scrollAmount,
-				behavior: 'smooth'
-			});
-		}
-	}
+    // Call initialization
+    initializeApp();
+} catch (e) {
+    console.error("Critical initialization error:", e);
+    const statusEl = document.getElementById('status-message');
+    if (statusEl) statusEl.textContent = "Init Error: " + e.message;
 }
 
-// Utility function to scroll chat container to bottom
+// Utility function to scroll story editor to bottom
 function scrollToBottom() {
-	if (El.chatContainer) {
-		El.chatContainer.scrollTop = El.chatContainer.scrollHeight;
+	if (El.storyEditor) {
+		El.storyEditor.scrollTop = El.storyEditor.scrollHeight;
 	}
 }

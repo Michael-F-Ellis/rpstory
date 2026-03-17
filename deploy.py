@@ -10,6 +10,7 @@ This script automates:
 5. Deploying to the GitHub Pages repository
 """
 
+import json
 import os
 import re
 import subprocess
@@ -27,38 +28,41 @@ def run_command(command, cwd=None, error_msg=None):
             print(f"Command failed: {' '.join(command)}")
         sys.exit(1)
 
-def bump_version(filepath):
-    """
-    Increment the patch version in the specified file.
-    Expects format like 'v1.0.9'
-    Returns the new version string.
-    """
+def get_package_version():
+    """Read the version from package.json"""
+    try:
+        with open('package.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('version')
+    except Exception as e:
+        print(f"Error reading package.json: {e}")
+        sys.exit(1)
+
+def update_version_in_file(filepath, new_version):
+    """Update the version string in the specified file."""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Regex to find version string
-        version_pattern = r'v(\d+)\.(\d+)\.(\d+)'
-        match = re.search(version_pattern, content)
+        # Regex to find version string (e.g., v1.0.10)
+        version_pattern = r'v\d+\.\d+\.\d+'
         
-        if not match:
-            print(f"Error: Could not find version string in {filepath}")
-            sys.exit(1)
+        # We want to replace it with v + the new version from package.json
+        formatted_version = f"v{new_version}"
         
-        old_version = match.group(0)
-        major, minor, patch = match.groups()
-        new_patch = int(patch) + 1
-        new_version = f"v{major}.{minor}.{new_patch}"
-        
-        new_content = content.replace(old_version, new_version)
+        if not re.search(version_pattern, content):
+            print(f"Warning: Could not find version string pattern in {filepath}")
+            return False
+            
+        new_content = re.sub(version_pattern, formatted_version, content)
         
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(new_content)
         
-        print(f"Version bumped from {old_version} to {new_version}")
-        return new_version
+        print(f"Updated version in {filepath} to {formatted_version}")
+        return True
     except Exception as e:
-        print(f"Error bumping version: {e}")
+        print(f"Error updating version in {filepath}: {e}")
         sys.exit(1)
 
 def main():
@@ -72,9 +76,14 @@ def main():
         print(f"Error: Run this script from the root of the rpstory repository.")
         sys.exit(1)
 
-    # 1. Bump version
-    print("Bumping version...")
-    new_version = bump_version(template_path)
+    # 1. Get version from package.json
+    print("Reading version from package.json...")
+    version = get_package_version()
+    new_version = f"v{version}"
+    
+    # Update version in templates
+    update_version_in_file(template_path, version)
+    update_version_in_file('index.template.html', version)
 
     # 2. Build
     print("Building index.html...")

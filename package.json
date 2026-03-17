@@ -1,6 +1,6 @@
 {
   "name": "rpchat",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "RPChat is a flexible chat interface for roleplaying with AI language models. It allows you to edit both your messages and AI responses, providing full control over the conversation context.",
   "main": "index.js",
   "scripts": {

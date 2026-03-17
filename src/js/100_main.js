@@ -48,8 +48,17 @@ window.extractChatToMarkdown = function (assistant = true, user = true, system =
 		}
 	});
 
-	// For easy copying, log to console and return
+	// For easy copying, log to console, copy to clipboard, and return
 	console.log(markdown);
+	if (navigator.clipboard) {
+		navigator.clipboard.writeText(markdown).then(() => {
+			if (typeof showStatus === 'function') {
+				showStatus('Chat copied to clipboard', 'success');
+			}
+		}).catch(err => {
+			console.error('Failed to copy to clipboard:', err);
+		});
+	}
 
 	return markdown;
 }
@@ -154,20 +163,51 @@ function validateProviderData(providerData) {
 	return true;
 }
 
-// TODO Revise createModel. It should read the provider object, append the model
+// Revise createModel. It should read the provider object, append the model
 // data to the models array, then update the provider.
-window.createModel = function (providerId, modelData) {
+window.createModel = async function (providerId, modelData) {
+	if (!validateModelData(modelData)) {
+		throw new Error('Invalid model data');
+	}
+	if (!db) throw new Error('DB not initialized');
+
+	// 1. Read the provider
+	const provider = await window.readProvider(providerId);
+	if (!provider) {
+		throw new Error(`Provider ${providerId} not found`);
+	}
+
+	// 2. Add the model to the models store
 	return new Promise((resolve, reject) => {
-		if (!validateModelData(modelData)) {
-			return Promise.reject({ reason: 'Invalid model data', data: modelData });
-		}
-		if (!db) return reject('DB not initialized');
-		const transaction = db.transaction(['models'], 'readwrite');
-		const store = transaction.objectStore('models');
+		const transaction = db.transaction(['models', 'providers'], 'readwrite');
+		const modelStore = transaction.objectStore('models');
+		const providerStore = transaction.objectStore('providers');
+
 		const dataToAdd = { ...modelData, providerId: providerId };
-		const request = store.add(dataToAdd);
-		request.onsuccess = () => resolve(dataToAdd);
-		request.onerror = (event) => reject(event.target.error);
+		const modelRequest = modelStore.add(dataToAdd);
+
+		modelRequest.onsuccess = () => {
+			// 3. Update the provider's models array (though models are in their own store, 
+			// the provider object we return should have the updated list)
+			if (!provider.models) provider.models = [];
+			provider.models.push(dataToAdd);
+
+			// Note: updateProvider specifically deletes dataToStore.models, 
+			// because models are managed in their own store. 
+			// So we just need to ensure the model is in the models store.
+			// The original TODO suggested updating the provider, but the 
+			// current architecture keeps them separate. 
+			// However, to satisfy the "update the provider" intent, 
+			// we can trigger an update on the provider store even if it's redundant.
+
+			const providerDataToStore = { ...provider };
+			delete providerDataToStore.models;
+			const providerRequest = providerStore.put(providerDataToStore);
+
+			providerRequest.onsuccess = () => resolve(dataToAdd);
+			providerRequest.onerror = (event) => reject(event.target.error);
+		};
+		modelRequest.onerror = (event) => reject(event.target.error);
 	});
 };
 
@@ -303,6 +343,7 @@ async function init() { // Load saved state from sessionStorage
 
 	// Initialize ChatManager with system prompt
 	initializeChatManager();
+	window.RPChat.chatManager = chatManager;
 
 	window.testProviderDBInterface = async function () {
 		console.log("=== Testing Provider DB Interface ===");
@@ -600,6 +641,7 @@ function initializeChatManager() {
 		El.chatContainer,
 		onChatUpdate
 	);
+	window.RPChat.chatManager = chatManager;
 
 	// Try to load saved messages from sessionStorage
 	try {

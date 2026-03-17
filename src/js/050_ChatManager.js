@@ -190,6 +190,12 @@ class ChatManager {
 	}
 
 	clear() {
+		if (this.messages.some(m => m.content.trim() !== '' && m.content.trim() !== '?')) {
+			if (!confirm('Are you sure you want to clear the entire chat? This cannot be undone.')) {
+				return;
+			}
+		}
+
 		this.systemMessage.content = 'You are a helpful assistant.';
 		const systemContentEl = this.systemMessage.element?.querySelector(`.${CSS_CLASSES.EDITABLE_CONTENT}`);
 		if (systemContentEl) {

@@ -17,7 +17,7 @@
 				<h1>RPStory</h1>
 				<div class="header-info">
 					<p>
-						v1.2.1&nbsp
+						v1.3.0&nbsp
 						<a href="https://github.com/michael-f-ellis/rpchat" class="header-link" target="_blank">Source
 							code</a>
 					</p>
@@ -26,7 +26,8 @@
 					<button id="scroll-top" class="header-icon-btn" aria-label="Scroll to top" title="Scroll to top">▲</button>
 					<button id="toggle-system-prompt" class="header-icon-btn" aria-label="Toggle System Prompt" title="Toggle System Prompt">📝</button>
 					<button id="scroll-bottom" class="header-icon-btn" aria-label="Scroll to bottom" title="Scroll to bottom">▼</button>
-					<button id="header-toggle" class="header-toggle" aria-label="Toggle header">⚙️</button>
+					<button id="toggle-preferences" class="header-icon-btn" aria-label="Preferences" title="Preferences">⚙️</button>
+					<button id="header-toggle" class="header-toggle" aria-label="Toggle header">☰</button>
 				</div>
 			</div>
 			<div id="header-content" class="header-content">
@@ -93,6 +94,25 @@
 		</div>
 	</div>
 
+
+	<!-- Preferences Modal -->
+	<div id="preferences-modal" class="modal-overlay">
+		<div class="modal-content">
+			<h2>Preferences</h2>
+			<div class="modal-options">
+				<div class="option">
+					<label for="theme-select">Theme:</label>
+					<select id="theme-select">
+						<option value="light">Light</option>
+						<option value="dark">Dark</option>
+					</select>
+				</div>
+			</div>
+			<div class="modal-buttons">
+				<button id="close-preferences" class="save-btn">Close</button>
+			</div>
+		</div>
+	</div>
 
 	<script>
 		// {{JS_PLACEHOLDER}}

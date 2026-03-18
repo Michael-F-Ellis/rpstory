@@ -318,6 +318,7 @@ async function initializeApp() {
 		showStatus('Failed to initialize database. Provider management will not work.', 'error');
 	}
 	loadStateFromStorage();
+	applyTheme(localStorage.getItem('theme') || 'light');
 
 	// Set up UI elements based on configuration
 	initializeUIElements();
@@ -519,6 +520,17 @@ function attachEventListeners() {
 
 	// Initial button state (could be simplified)
     if (El.sendButton) El.sendButton.disabled = false;
+
+	// Preferences toggles
+	if (El.togglePreferencesBtn) {
+		El.togglePreferencesBtn.addEventListener('click', handleTogglePreferences);
+	}
+	if (El.closePreferencesBtn) {
+		El.closePreferencesBtn.addEventListener('click', handleClosePreferences);
+	}
+	if (El.themeSelect) {
+		El.themeSelect.addEventListener('change', handleThemeChange);
+	}
 }
 
 // Handle provider change
@@ -687,6 +699,39 @@ function handleCloseSystemPrompt() {
     }
     
     El.systemPromptModal.style.display = 'none';
+}
+
+// Handle Preferences (Modal)
+function handleTogglePreferences() {
+	if (!El.preferencesModal || !El.themeSelect) return;
+	
+	// Set current theme in select
+	El.themeSelect.value = localStorage.getItem('theme') || 'light';
+	El.preferencesModal.style.display = 'flex';
+}
+
+function handleClosePreferences() {
+	if (!El.preferencesModal) return;
+	El.preferencesModal.style.display = 'none';
+}
+
+function handleThemeChange(event) {
+	const theme = event.target.value;
+	applyTheme(theme);
+}
+
+function applyTheme(theme) {
+	if (theme === 'dark') {
+		document.body.classList.add('dark-theme');
+	} else {
+		document.body.classList.remove('dark-theme');
+	}
+	localStorage.setItem('theme', theme);
+	
+	// Update select if it exists (e.g. if called during init)
+	if (El.themeSelect) {
+		El.themeSelect.value = theme;
+	}
 }
 
 // Show status message and use as notification handler for ChatManager

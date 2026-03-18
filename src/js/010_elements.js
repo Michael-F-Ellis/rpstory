@@ -20,5 +20,10 @@ const El = {
 	toggleSystemPromptBtn: document.getElementById('toggle-system-prompt'),
 	systemPromptModal: document.getElementById('system-prompt-modal'),
 	systemPromptText: document.getElementById('system-prompt-text'),
-	closeSystemPromptBtn: document.getElementById('close-system-prompt')
+	closeSystemPromptBtn: document.getElementById('close-system-prompt'),
+	// Preferences elements
+	togglePreferencesBtn: document.getElementById('toggle-preferences'),
+	preferencesModal: document.getElementById('preferences-modal'),
+	themeSelect: document.getElementById('theme-select'),
+	closePreferencesBtn: document.getElementById('close-preferences')
 };

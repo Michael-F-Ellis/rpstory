@@ -34,7 +34,8 @@ window.RPChat.importExport = (function () {
 		const importInput = document.createElement('input');
 		importInput.type = 'file';
 		importInput.id = 'import-input';
-		importInput.accept = '.json';
+		// Accept .json files and the application/json MIME type
+		importInput.accept = '.json,application/json';
 		importInput.style.display = 'none';
 		document.body.appendChild(importInput);
 

@@ -268,12 +268,8 @@ button:disabled {
 }
 
 .background-highlight {
-    background-color: rgba(49, 130, 206, 0.08);
-    border: 1px dashed #3182ce;
     font-style: italic;
     color: #2b6cb0;
-    border-radius: 2px;
-    padding: 0 2px;
 }
 
 .active-prompt {

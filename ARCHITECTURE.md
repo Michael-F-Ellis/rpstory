@@ -1,260 +1,80 @@
-# RPChat Architecture Reference
+# RPStory Architecture Reference
 
 ## Overview
 
-RPChat is a single-page application (SPA) that provides a flexible chat interface for roleplaying with AI language models. The application is built using vanilla JavaScript with a component-based architecture that allows for message editing, provider switching, and full conversation management.
+RPStory is a single-page application (SPA) designed for iterative AI-assisted story writing. Unlike traditional chat interfaces, RPStory uses a **SingleText** document model where the user writes in a unified editor, and AI interactions are triggered by specific syntax embedded directly in the text.
 
 ## Design Goals
-- **Serverless** *Run in any modern browser. No backend required.*
-- **No Dependencies** *HTML+CSS+JS.  No third-party libraries*
+- **Serverless**: Runs entirely in the browser. No backend required.
+- **No Dependencies**: Pure HTML, CSS, and vanilla JS. No external libraries.
+- **Document-Centric**: Focus on the story as a single evolving entity rather than a series of messages.
 
 ## Application Structure
 
-### Core Architecture
-
 ```
-├── HTML Structure (index.html.template)
-├── CSS Styles (embedded)
-├── JavaScript Components
-│   ├── Core Classes
-│   │   ├── ChatMessage
-│   │   ├── ChatManager
-│   │   ├── AIProvider
-│   │   └── AIModel
-│   ├── UI Management
-│   ├── API Communication
-│   ├── Storage Management
-│   └── Import/Export
-└── Configuration Files
-    ├── providers.json
-    └── systemprompts.json
+├── index.html (Build target)
+├── src/
+│   ├── html/template.html (UI structure)
+│   ├── css/main.css (Styles)
+│   └── js/
+│       ├── 010_elements.js (DOM references)
+│       ├── 050_StoryManager.js (Editor logic & Syntax Highlighting)
+│       ├── 080_api.js (Provider-specific API logic)
+│       ├── 081_processor.js (Iterative prompting engine)
+│       ├── 090_importExport.js (JSON persistence)
+│       └── 100_main.js (App coordination)
 ```
 
-## Core Classes and Components
+## Core Components
 
-### 1. ChatMessage Class
+### 1. StoryManager (`050_StoryManager.js`)
+**Purpose**: Manages the `#story-editor` (contenteditable) and handles real-time syntax highlighting.
 
-**Purpose**: Represents individual chat messages with editing capabilities
+- **Content Tracking**: Provides methods to get/set the raw text while preserving cursor position.
+- **Syntax Highlighting**: Uses regex-based replacement to wrap `[[prompt]]` and `{{background}}` tags in styled `<span>` tags.
+- **UI State**: Manages the visual feedback for active processing.
 
-**Key Properties**:
-- `role`: Message role (system, user, assistant, app)
-- `content`: Message text content
-- `id`: Unique identifier
-- `element`: DOM element reference
+### 2. IterativePromptProcessor (`081_processor.js`)
+**Purpose**: The "engine" that parses the document and manages sequential AI requests.
 
-**Key Methods**:
-- `createMessageElement()`: Creates DOM structure for message
-- `startEditing()`: Enables inline editing
-- `saveEdit()`: Saves edited content
-- `cancelEdit()`: Cancels editing
-- `render(container)`: Renders message to DOM
+- **Prompt Discovery**: Scans the text for `[[...]]` blocks.
+- **Context Assembly**: Gathers all `{{...}}` blocks to include as persistent context.
+- **Sequential Execution**: Processes each prompt one-by-one, replacing the tag with the AI response in real-time.
+- **Continuation**: If no prompts are found, it defaults to a "Continue from end" behavior using the full text as context.
 
-**Special Features**:
-- Collapsible system messages
-- Role-based styling
-- Edit/delete controls
-- Character attribution
+### 3. AIProvider & AIModel (`080_api.js`)
+**Purpose**: Abstracts the differences between various AI providers (OpenAI, Gemini, DeepSeek, etc.).
 
-### 2. ChatManager Class
+- **Request Formatting**: Translates the unified prompt/context into provider-specific JSON payloads.
+- **Key Management**: Maps provider IDs to specific `localStorage` keys for API authentication.
 
-**Purpose**: Manages collection of ChatMessage objects and enforces conversation rules
+### 4. Import/Export (`090_importExport.js`)
+**Purpose**: Handles saving and loading story sessions.
 
-**Key Properties**:
-- `messages`: Array of ChatMessage instances
-- `container`: DOM container for rendering
-- `notificationHandler`: Status message callback
-- `onUpdate`: Update callback function
-
-**Key Methods**:
-- `addMessage(role, content)`: Adds single message
-- `addMessages(messages)`: Batch adds messages
-- `handleDelete(messageId)`: Deletes single message
-- `handleDeleteFromHere(messageId)`: Deletes from point onwards
-- `getMessagesJSON()`: Exports messages as JSON
-- `parseMessagesJSON(data)`: Imports messages from JSON
-- `render()`: Renders all messages to DOM
-
-**Business Rules**:
-- Exactly one system message (always first)
-- Trailing empty user message for continuation
-- System message cannot be deleted
-- Validate message structure on import
-
-### 3. AIProvider Class
-
-**Purpose**: Handles AI provider configuration and API communication
-
-**Key Properties**:
-- `id`: Provider identifier
-- `displayName`: Human-readable name
-- `endpoint`: API endpoint URL
-- `models`: Array of available models
-- `apiFormat`: API format (openai/gemini-native)
-- `defaultMaxTokens`: Default token limit
-
-**Key Methods**:
-- `getModel(modelId)`: Gets specific model configuration
-- `prepareRequestBody()`: Formats request for API
-- `prepareOpenAIRequestBody()`: OpenAI-compatible format
-- `prepareGeminiRequestBody()`: Gemini-native format
-- `apiKeyName`: Generates API key storage name
-
-### 4. AIModel Class
-
-**Purpose**: Represents individual AI model configuration
-
-**Key Properties**:
-- `id`: Model identifier
-- `displayName`: Human-readable name
-- `defaultTemperature`: Default temperature setting
-- `extraFields`: Additional model-specific configuration
-
-## Key Constants and Enums
-
-### ROLES
-- `SYSTEM`: System prompts
-- `USER`: User messages
-- `ASSISTANT`: AI responses
-- `APP`: Application messages (errors, notifications)
-
-### CSS_CLASSES
-- `MESSAGE`: Base message class
-- `USER_MESSAGE`: User message styling
-- `ASSISTANT_MESSAGE`: Assistant message styling
-- `SYSTEM_MESSAGE`: System message styling
-- `EDITABLE_CONTENT`: Editable content areas
-- `COLLAPSIBLE`/`COLLAPSED`: Collapsible message states
-
-## Core Functions and Operations
-
-### Initialization Flow
-1. **`initializeApp()`**: Main entry point
-2. **`init()`**: Core initialization
-3. **`loadStateFromStorage()`**: Loads saved state
-4. **`initializeUIElements()`**: Sets up UI components
-5. **`initializeChatManager()`**: Creates chat manager
-6. **`attachEventListeners()`**: Binds event handlers
-
-### Message Management
-- **`handleSendMessage()`**: Processes send button clicks
-- **`sendMessage(content)`**: Initiates API call
-- **`callAPI(messages)`**: Makes HTTP request to provider
-- **`handleApiResponse()`**: Processes API response
-- **`handleApiError()`**: Handles API errors
-
-### UI State Management
-- **`updateSendButtonState()`**: Controls send button availability
-- **`updateModelSelector()`**: Updates model dropdown
-- **`updateSystemPromptSelector()`**: Updates system prompt dropdown
-- **`showStatus(message, type)`**: Displays status messages
-
-### Storage Operations
-- **`onChatUpdate()`**: Saves chat state to sessionStorage
-- **`loadStateFromStorage()`**: Loads persisted state
-- **API keys**: Stored in localStorage for persistence
-- **Chat messages**: Stored in sessionStorage for tab isolation
+- **JSON Format**: Saves the story text and metadata as a standard JSON object.
+- **System Prompt Handling**: Automatically extracts/injects `{{SYSTEM ...}}` markers to ensure the system persona is persisted without cluttering the main editor.
+- **Backwards Compatibility**: Migrates legacy chat-format JSON files into the SingleText format on import.
 
 ## Data Flow
 
-### Message Lifecycle
-1. User types in trailing message
-2. Message validation occurs
-3. API request prepared via ChatManager
-4. Provider-specific formatting applied
-5. HTTP request sent to AI provider
-6. Response processed and added to chat
-7. UI updated and state persisted
-
-### State Management
-- **Session State**: Provider, model, temperature, messages
-- **Persistent State**: API keys, user preferences
-- **UI State**: Edit modes, button states, collapsible states
-
-## Provider Integration
-
-### Adding New Providers
-1. Add configuration to `providers.json`
-2. Provider must implement OpenAI-compatible API
-3. Custom formatting handled in `prepareRequestBody()`
-4. API authentication via Bearer token or URL parameter
-
-### API Formats Supported
-- **OpenAI Compatible**: Standard chat completions format
-- **Gemini Native**: Google's native API format with custom transformations
-
-## Import/Export System
-
-### Export Format
-```json
-{
-  "messages": [
-    {
-      "role": "system|user|assistant",
-      "content": "message content",
-      "characterId": 0,
-      "visibility": 1
-    }
-  ],
-  "exportDate": "ISO timestamp"
-}
-```
-
-### Import Process
-1. File validation
-2. Message structure verification
-3. System message rule enforcement
-4. ChatMessage instance creation
-5. UI rendering and state persistence
-
-### Extracting Chat to Markdown
-1. User selects which roles to include and whether to label them.
-2. App formats the doc
-3. App presents a system File Save dialog
-4. User selects the destination and file name  (or cancels).
-
-## Key Design Patterns
-
-### Component-Based Architecture
-- Self-contained classes with clear responsibilities
-- Event-driven communication between components
-- Separation of concerns (UI, data, API)
-
-### Observer Pattern
-- ChatManager notifies on updates
-- UI components respond to state changes
-- MutationObserver for DOM change detection
-
-### Strategy Pattern
-- Provider-specific API formatting
-- Pluggable system prompt styles
-- Configurable model parameters
+### AI Interaction Loop
+1. **Trigger**: User clicks "Process Story".
+2. **Scan**: `IterativePromptProcessor` identifies all `[[prompt]]` tags.
+3. **Loop**:
+   - Assemble context: `System Prompt` + `{{Background Blocks}}` + `Text preceding the prompt`.
+   - Send API Request via `AIProvider`.
+   - **Update**: Replace `[[prompt]]` with AI response in the editor via `StoryManager`.
+4. **Finalize**: Scroll to bottom and show completion status.
 
 ## Extension Points
 
-### Adding Features
-- **New Message Types**: Extend ROLES enum and add styling
-- **Custom Providers**: Add to providers.json with API compatibility
-- **UI Enhancements**: Modify CSS classes and DOM structure
-- **Storage Backends**: Replace localStorage/sessionStorage calls
-
-### Configuration
-- **System Prompts**: Add to systemprompts.json
-- **Model Parameters**: Extend AIModel class
-- **UI Behavior**: Modify constants and CSS classes
+- **New Highlighting**: Add new regex patterns to `StoryManager.applyHighlighting`.
+- **New Providers**: Add configurations to `providers.json`.
+- **UI Customization**: Modify `template.html` and `main.css`.
 
 ## Error Handling
-
-### API Errors
-- Network failures gracefully handled
-- Error messages displayed as app messages
-- State recovery maintained
-
-### Validation
-- Message structure validation on import
-- API key presence checking
-- Content validation before sending
-
-### User Experience
-- Disabled controls during processing
+- **Missing Brackets**: Validates that all tags are properly closed before processing.
+- **API Failures**: Displays error status without losing the current story state.
+- **Browser Limits**: Uses `sessionStorage` for temporary state and `localStorage` for persistent API keys.sabled controls during processing
 - Status messages for user feedback
 - Confirmation dialogs for destructive actions

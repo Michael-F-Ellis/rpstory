@@ -295,61 +295,6 @@ button:disabled {
     100% { opacity: 1; }
 }
 
-.message {
-	margin-bottom: 1rem;
-	padding: 0.8rem;
-	border-radius: 8px;
-	max-width: 85%;
-}
-
-.user-message {
-	/* Used in createMessageElement() */
-	background-color: #e9ecef;
-	align-self: flex-end;
-	margin-left: 15%;
-	/* Set explicit width to fill available space */
-	width: 85%;
-}
-
-.assistant-message {
-	/* Renamed to match ASSISTANT_MESSAGE in JS */
-	background-color: #f0f4f8;
-	align-self: flex-start;
-	margin-right: 15%;
-	width: 85%;
-}
-
-.message-controls {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.5rem;
-	margin-top: 0.5rem;
-}
-
-.edit-message,
-.save-edit,
-.cancel-edit {
-	font-size: 0.8rem;
-	padding: 0.2rem 0.5rem;
-}
-
-.editable-content {
-	min-height: 2rem;
-	padding: 0.5rem;
-	outline: none;
-	white-space: pre-wrap;
-	/* preserve whitespace and wrap text */
-}
-
-.editable-content[contenteditable="true"] {
-	border: 1px dashed var(--highlight-color);
-	background-color: rgba(128, 90, 213, 0.05);
-}
-
-.input-area {
-	display: flex;
-	gap: 0.5rem;
-}
 
 .status-bar {
 	padding: 0.5rem 1rem;
@@ -359,37 +304,6 @@ button:disabled {
 	font-size: 0.9rem;
 }
 
-button.icon-button {
-	background: transparent;
-	border: none;
-	cursor: pointer;
-	font-size: 1.2rem;
-	padding: 5px;
-	border-radius: 4px;
-	transition: background-color 0.2s;
-}
-
-.icon-button:hover {
-	background-color: rgba(66, 133, 244, 0.1);
-	/* Light blue background on hover */
-}
-
-button.edit-message {
-	background: transparent;
-	border: none;
-}
-
-button.delete-message {
-	background: transparent;
-	border: none;
-}
-
-button.delete-from-here {
-	background: transparent;
-	border: none;
-	color: red;
-	font-style: bold;
-}
 
 .temperature-container {
 	display: flex;
@@ -510,6 +424,29 @@ footer {
 	background-color: #4a5568;
 }
 
+/* System Prompt Modal specific */
+.system-prompt-modal {
+	max-width: 600px;
+}
+
+#system-prompt-text {
+	width: 100%;
+	min-height: 300px;
+	padding: 1rem;
+	font-family: inherit;
+	font-size: 1rem;
+	border: 1px solid #cbd5e0;
+	border-radius: 4px;
+	resize: vertical;
+	margin-top: 1rem;
+}
+
+.modal-help {
+	font-size: 0.9rem;
+	color: #718096;
+	margin-bottom: 0.5rem;
+}
+
 
 	</style>
 </head>
@@ -518,16 +455,17 @@ footer {
 	<div class="container">
 		<header>
 			<div class="header-title">
-				<h1>RPChat</h1>
+				<h1>RPStory</h1>
 				<div class="header-info">
 					<p>
-						v1.1.0&nbsp
+						v1.2.0&nbsp
 						<a href="https://github.com/michael-f-ellis/rpchat" class="header-link" target="_blank">Source
 							code</a>
 					</p>
 				</div>
 				<div class="header-actions">
 					<button id="scroll-top" class="header-icon-btn" aria-label="Scroll to top" title="Scroll to top">▲</button>
+					<button id="toggle-system-prompt" class="header-icon-btn" aria-label="Toggle System Prompt" title="Toggle System Prompt">📝</button>
 					<button id="scroll-bottom" class="header-icon-btn" aria-label="Scroll to bottom" title="Scroll to bottom">▼</button>
 					<button id="header-toggle" class="header-toggle" aria-label="Toggle header">⚙️</button>
 				</div>
@@ -583,6 +521,18 @@ footer {
 			</div>
 		</footer>
 	</div>
+	
+	<!-- System Prompt Modal -->
+	<div id="system-prompt-modal" class="modal-overlay">
+		<div class="modal-content system-prompt-modal">
+			<h2>Edit System Prompt</h2>
+			<p class="modal-help">This prompt defines the AI's persona and rules for this story.</p>
+			<textarea id="system-prompt-text" rows="10" placeholder="Enter system prompt here..."></textarea>
+			<div class="modal-buttons">
+				<button id="close-system-prompt" class="save-btn">Close & Autosave</button>
+			</div>
+		</div>
+	</div>
 
 
 	<script>
@@ -604,7 +554,11 @@ const El = {
 	scrollTopBtn: document.getElementById('scroll-top'),
 	scrollBottomBtn: document.getElementById('scroll-bottom'),
 	// New elements for Markdown extraction
-	extractMdBtn: document.getElementById('extract-chat-md')
+	extractMdBtn: document.getElementById('extract-chat-md'),
+	toggleSystemPromptBtn: document.getElementById('toggle-system-prompt'),
+	systemPromptModal: document.getElementById('system-prompt-modal'),
+	systemPromptText: document.getElementById('system-prompt-text'),
+	closeSystemPromptBtn: document.getElementById('close-system-prompt')
 };
 
 /* Chat Message Class and Constants
@@ -690,7 +644,7 @@ class StoryManager {
     }
 
     /**
-     * Apply syntax highlighting to [[prompt]] and {{background}} blocks.
+     * Apply syntax highlighting to [[prompt]], {{SYSTEM ...}} and {{background}} blocks.
      * Uses a selection save/restore trick based on character offset.
      */
     applyHighlighting(force = false) {
@@ -708,11 +662,13 @@ class StoryManager {
         const rawText = this.getContent();
         
         // Only re-render if text actually changed or forced
-        // (This helps avoid jumps while typing plain text)
         const escaped = this._escapeHTML(rawText);
-        const highlighted = escaped
-            .replace(/\[\[(.*?)\]\]/g, '<span class="prompt-highlight">[[$1]]</span>')
-            .replace(/\{\{(.*?)\}\}/g, '<span class="background-highlight">{{$1}}</span>');
+        let highlighted = escaped
+            .replace(/\[\[(.*?)\]\]/gs, '<span class="prompt-highlight">[[$1]]</span>');
+            
+        highlighted = highlighted.replace(/\{\{(.*?)\}\}/gs, (match, content) => {
+            return `<span class="background-highlight">${match}</span>`;
+        });
 
         if (this.container.innerHTML !== highlighted || force) {
             this.container.innerHTML = highlighted;
@@ -725,6 +681,7 @@ class StoryManager {
         this._notifyUpdate();
     }
 
+
     _escapeHTML(text) {
         return text
             .replace(/&/g, '&amp;')
@@ -733,7 +690,9 @@ class StoryManager {
     }
 
     _getCursorOffset() {
+        // ... (rest of the helper methods remain unchanged)
         const selection = window.getSelection();
+        if (selection.rangeCount === 0) return 0;
         const range = selection.getRangeAt(0);
         const preCaretRange = range.cloneRange();
         preCaretRange.selectNodeContents(this.container);
@@ -769,14 +728,12 @@ class StoryManager {
     }
 
     _handleInput() {
-        // Debounce highlighting to avoid lag while typing fast
         if (this._highlightTimeout) clearTimeout(this._highlightTimeout);
         this._highlightTimeout = setTimeout(() => this.applyHighlighting(), 500);
         this._notifyUpdate();
     }
 
     _handleKeyDown(e) {
-        // Custom keys handling if needed (e.g. Tab)
     }
 
     _notifyUpdate() {
@@ -785,21 +742,26 @@ class StoryManager {
         }
     }
 
-    /**
-     * Highlights an active prompt during processing.
-     */
     highlightActivePrompt(index, length) {
-        // Implementation for visual feedback during generation
     }
 }
 
-// Global CSS for highlighting (to be injected or added to main.css)
+// Global CSS for highlighting
 const STORY_STYLES = `
 .prompt-highlight {
     background-color: rgba(128, 90, 213, 0.2);
     border-bottom: 2px solid #805ad5;
     font-weight: bold;
     color: #553c9a;
+}
+.system-highlight {
+    background-color: rgba(221, 107, 32, 0.15);
+    border: 2px solid #dd6b20;
+    font-weight: bold;
+    color: #9c4221;
+    display: block;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem;
 }
 .background-highlight {
     background-color: rgba(49, 130, 206, 0.1);
@@ -1136,6 +1098,12 @@ function updateSystemPromptSelector() {
 
 // Function to get the current system prompt content
 function getCurrentSystemPrompt() {
+	// First priority: Story-specific system prompt (Separate Editor approach)
+	const storyPrompt = sessionStorage.getItem('storySystemPrompt');
+	if (storyPrompt) {
+		return storyPrompt;
+	}
+
 	const selector = El.systemPromptSelector;
 	if (!selector) return 'You are a helpful assistant.';
 
@@ -1314,7 +1282,6 @@ class IterativePromptProcessor {
         const errors = [];
 
         // Check for nesting or unterminated brackets
-        // This is a simple validation.
         let openPrompt = text.split('[[').length - 1;
         let closePrompt = text.split(']]').length - 1;
         let openBG = text.split('{{').length - 1;
@@ -1324,8 +1291,8 @@ class IterativePromptProcessor {
         if (openBG !== closeBG) errors.push("Unterminated background brackets {{ }}");
 
         // Use regex with exec to get indices
-        const promptRegex = /\[\[(.*?)\]\]/g;
-        const bgRegex = /\{\{(.*?)\}\}/g;
+        const promptRegex = /\[\[(.*?)\]\]/gs; // Added 's' flag for multi-line prompts
+        const bgRegex = /\{\{(.*?)\}\}/gs;     // Added 's' flag for multi-line backgrounds
 
         let match;
         while ((match = promptRegex.exec(text)) !== null) {
@@ -1344,12 +1311,12 @@ class IterativePromptProcessor {
             });
         }
 
-        // Check for nesting (simple check: if a match contains [[ or {{ inside the content)
+        // Check for nesting
         prompts.forEach(p => {
             if (p.content.includes('[[') || p.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
         });
         backgroundBlocks.forEach(b => {
-            if (b.content.includes('[[') || b.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
+             if (b.content.includes('[[') || b.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
         });
 
         return { prompts, backgroundBlocks, errors };
@@ -1499,9 +1466,14 @@ class IterativePromptProcessor {
 window.RPChat = window.RPChat || {};
 window.RPChat.importExport = (function () {
 	// Function to export story data
-	function exportStory(content) {
+	function exportStory(content, systemPrompt) {
+		let finalContent = content;
+		if (systemPrompt && systemPrompt.trim()) {
+			finalContent = `{{SYSTEM ${systemPrompt.trim()}}}\n\n` + content;
+		}
+
 		const storyData = {
-			storyContent: content,
+			storyContent: finalContent,
 			exportDate: new Date().toISOString(),
             format: 'singletext'
 		};
@@ -1533,7 +1505,8 @@ window.RPChat.importExport = (function () {
 		if (exportBtn) {
 			exportBtn.addEventListener('click', () => {
 				const content = window.RPChat.storyManager.getContent();
-				exportStory(content);
+				const systemPrompt = typeof getCurrentSystemPrompt === 'function' ? getCurrentSystemPrompt() : '';
+				exportStory(content, systemPrompt);
 			});
 		}
 
@@ -1571,23 +1544,34 @@ window.RPChat.importExport = (function () {
 							// LEGACY MIGRATION
                             showStatus('Migrating legacy chat format...', 'info');
                             
-                            // 1. Preserve system prompt if present
+                            // 1. Extract system prompt if present
                             const systemMsg = importedData.messages.find(m => m.role === 'system');
-                            if (systemMsg) {
-                                sessionStorage.setItem('importedSystemPrompt', systemMsg.content);
-                                if (El.systemPromptSelector) El.systemPromptSelector.value = 'imported';
-                                if (typeof updateSystemPromptSelector === 'function') updateSystemPromptSelector();
+                            let systemBlock = '';
+                            if (systemMsg && systemMsg.content) {
+                                systemBlock = `{{SYSTEM ${systemMsg.content.trim()}}}\n\n`;
                             }
 
                             // 2. Flatten user/assistant messages
-                            finalContent = importedData.messages
+                            const storyText = importedData.messages
                                 .filter(m => m.role === 'user' || m.role === 'assistant')
                                 .map(m => m.content.trim())
                                 .filter(c => c.length > 0 && c !== '?')
                                 .join('\n\n');
+                            
+                            finalContent = systemBlock + storyText;
 						} else {
 							throw new Error('Unrecognized file format.');
 						}
+
+                        // NEW: Extract system prompt from finalContent if present (at the very beginning)
+                        const systemRegex = /^\{\{\s*SYSTEM([\s\S]*?)\}\}\n*/i;
+                        const match = finalContent.match(systemRegex);
+                        if (match) {
+                            const extractedSystem = match[1].trim();
+                            sessionStorage.setItem('storySystemPrompt', extractedSystem);
+                            finalContent = finalContent.replace(systemRegex, '');
+                            showStatus('Extracted system prompt from imported file', 'info');
+                        }
 
 						window.RPChat.storyManager.setContent(finalContent);
 						sessionStorage.setItem('storyContent', finalContent);
@@ -2114,17 +2098,25 @@ function attachEventListeners() {
 	// Scroll buttons
 	if (El.scrollTopBtn) {
 		El.scrollTopBtn.addEventListener('click', () => {
-			if (El.chatContainer) {
-				El.chatContainer.scrollTo({ top: 0, behavior: 'smooth' });
+			if (El.storyEditor) {
+				El.storyEditor.scrollTo({ top: 0, behavior: 'smooth' });
 			}
 		});
 	}
 	if (El.scrollBottomBtn) {
 		El.scrollBottomBtn.addEventListener('click', () => {
-			if (El.chatContainer) {
-				El.chatContainer.scrollTo({ top: El.chatContainer.scrollHeight, behavior: 'smooth' });
+			if (El.storyEditor) {
+				El.storyEditor.scrollTo({ top: El.storyEditor.scrollHeight, behavior: 'smooth' });
 			}
 		});
+	}
+
+	// Toggle System Prompt Modal
+	if (El.toggleSystemPromptBtn) {
+		El.toggleSystemPromptBtn.addEventListener('click', handleToggleSystemPrompt);
+	}
+	if (El.closeSystemPromptBtn) {
+		El.closeSystemPromptBtn.addEventListener('click', handleCloseSystemPrompt);
 	}
 
 	// Initial button state (could be simplified)
@@ -2230,6 +2222,7 @@ async function handleProcessStory() {
         // Update story editor with changes
         storyManager.setContent(data.updatedText);
         showStatus(`Processed prompt. ${data.response.length} chars added.`, 'success');
+        scrollToBottom();
     };
 
     const onTotalError = (err) => {
@@ -2248,6 +2241,7 @@ async function handleProcessStory() {
     isProcessing = false;
     El.sendButton.disabled = false;
     showStatus('Story development complete.', 'success');
+    scrollToBottom();
 }
 
 // Handle API errors
@@ -2271,6 +2265,30 @@ function handleClearStory() {
 		sessionStorage.removeItem('storyContent');
 	}
 	showStatus('Story cleared');
+}
+
+// Handle system prompt toggle (Modal)
+function handleToggleSystemPrompt() {
+    if (!El.systemPromptModal || !El.systemPromptText) return;
+    
+    // Populate with current prompt before showing
+    El.systemPromptText.value = getCurrentSystemPrompt();
+    El.systemPromptModal.style.display = 'flex';
+}
+
+function handleCloseSystemPrompt() {
+    if (!El.systemPromptModal || !El.systemPromptText) return;
+    
+    const newPrompt = El.systemPromptText.value.trim();
+    if (newPrompt) {
+        sessionStorage.setItem('storySystemPrompt', newPrompt);
+        showStatus('System prompt updated for this story', 'success');
+    } else {
+        sessionStorage.removeItem('storySystemPrompt');
+        showStatus('System prompt reset to default', 'info');
+    }
+    
+    El.systemPromptModal.style.display = 'none';
 }
 
 // Show status message and use as notification handler for ChatManager
@@ -2334,6 +2352,7 @@ try {
 
     // Call initialization
     initializeApp();
+
 } catch (e) {
     console.error("Critical initialization error:", e);
     const statusEl = document.getElementById('status-message');

@@ -14,16 +14,17 @@
 	<div class="container">
 		<header>
 			<div class="header-title">
-				<h1>RPChat</h1>
+				<h1>RPStory</h1>
 				<div class="header-info">
 					<p>
-						v1.1.0&nbsp
+						v1.2.0&nbsp
 						<a href="https://github.com/michael-f-ellis/rpchat" class="header-link" target="_blank">Source
 							code</a>
 					</p>
 				</div>
 				<div class="header-actions">
 					<button id="scroll-top" class="header-icon-btn" aria-label="Scroll to top" title="Scroll to top">▲</button>
+					<button id="toggle-system-prompt" class="header-icon-btn" aria-label="Toggle System Prompt" title="Toggle System Prompt">📝</button>
 					<button id="scroll-bottom" class="header-icon-btn" aria-label="Scroll to bottom" title="Scroll to bottom">▼</button>
 					<button id="header-toggle" class="header-toggle" aria-label="Toggle header">⚙️</button>
 				</div>
@@ -78,6 +79,18 @@
 				<button id="send-button">Send</button>
 			</div>
 		</footer>
+	</div>
+	
+	<!-- System Prompt Modal -->
+	<div id="system-prompt-modal" class="modal-overlay">
+		<div class="modal-content system-prompt-modal">
+			<h2>Edit System Prompt</h2>
+			<p class="modal-help">This prompt defines the AI's persona and rules for this story.</p>
+			<textarea id="system-prompt-text" rows="10" placeholder="Enter system prompt here..."></textarea>
+			<div class="modal-buttons">
+				<button id="close-system-prompt" class="save-btn">Close & Autosave</button>
+			</div>
+		</div>
 	</div>
 
 

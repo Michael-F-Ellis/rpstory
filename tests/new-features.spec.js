@@ -9,9 +9,9 @@ test.describe('RPStory New Features', () => {
 	});
 
 	test('should show confirmation dialog when clearing non-empty chat', async ({ page }) => {
-		// 1. Add some content to the story area using addMessage (which handles DOM)
+		// 1. Add some content to the story area using setContent
 		await page.evaluate(() => {
-			window.RPChat.chatManager.addMessage('assistant', 'Some story content');
+			window.RPChat.storyManager.setContent('Some story content');
 		});
 
 		// 2. Click clear and check for dialog
@@ -26,8 +26,8 @@ test.describe('RPStory New Features', () => {
 		expect(dialogAppeared).toBe(true);
 		
 		// Story should still be there because we dismissed
-		const storyContent = await page.locator('.assistant-message .editable-content').textContent();
-		expect(storyContent).toBe('Some story content');
+		const storyContent = await page.locator('#story-editor').textContent();
+		expect(storyContent).toContain('Some story content');
 	});
 
 	test('should copy chat to clipboard when extracting', async ({ page }) => {
@@ -42,7 +42,7 @@ test.describe('RPStory New Features', () => {
 
 		// Add some content
 		await page.evaluate(() => {
-			window.RPChat.chatManager.addMessage('assistant', 'Story to extract');
+			window.RPChat.storyManager.setContent('Story to extract');
 		});
 
 		// Click extract

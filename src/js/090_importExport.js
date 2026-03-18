@@ -2,9 +2,14 @@
 window.RPChat = window.RPChat || {};
 window.RPChat.importExport = (function () {
 	// Function to export story data
-	function exportStory(content) {
+	function exportStory(content, systemPrompt) {
+		let finalContent = content;
+		if (systemPrompt && systemPrompt.trim()) {
+			finalContent = `{{SYSTEM ${systemPrompt.trim()}}}\n\n` + content;
+		}
+
 		const storyData = {
-			storyContent: content,
+			storyContent: finalContent,
 			exportDate: new Date().toISOString(),
             format: 'singletext'
 		};
@@ -36,7 +41,8 @@ window.RPChat.importExport = (function () {
 		if (exportBtn) {
 			exportBtn.addEventListener('click', () => {
 				const content = window.RPChat.storyManager.getContent();
-				exportStory(content);
+				const systemPrompt = typeof getCurrentSystemPrompt === 'function' ? getCurrentSystemPrompt() : '';
+				exportStory(content, systemPrompt);
 			});
 		}
 
@@ -74,23 +80,34 @@ window.RPChat.importExport = (function () {
 							// LEGACY MIGRATION
                             showStatus('Migrating legacy chat format...', 'info');
                             
-                            // 1. Preserve system prompt if present
+                            // 1. Extract system prompt if present
                             const systemMsg = importedData.messages.find(m => m.role === 'system');
-                            if (systemMsg) {
-                                sessionStorage.setItem('importedSystemPrompt', systemMsg.content);
-                                if (El.systemPromptSelector) El.systemPromptSelector.value = 'imported';
-                                if (typeof updateSystemPromptSelector === 'function') updateSystemPromptSelector();
+                            let systemBlock = '';
+                            if (systemMsg && systemMsg.content) {
+                                systemBlock = `{{SYSTEM ${systemMsg.content.trim()}}}\n\n`;
                             }
 
                             // 2. Flatten user/assistant messages
-                            finalContent = importedData.messages
+                            const storyText = importedData.messages
                                 .filter(m => m.role === 'user' || m.role === 'assistant')
                                 .map(m => m.content.trim())
                                 .filter(c => c.length > 0 && c !== '?')
                                 .join('\n\n');
+                            
+                            finalContent = systemBlock + storyText;
 						} else {
 							throw new Error('Unrecognized file format.');
 						}
+
+                        // NEW: Extract system prompt from finalContent if present (at the very beginning)
+                        const systemRegex = /^\{\{\s*SYSTEM([\s\S]*?)\}\}\n*/i;
+                        const match = finalContent.match(systemRegex);
+                        if (match) {
+                            const extractedSystem = match[1].trim();
+                            sessionStorage.setItem('storySystemPrompt', extractedSystem);
+                            finalContent = finalContent.replace(systemRegex, '');
+                            showStatus('Extracted system prompt from imported file', 'info');
+                        }
 
 						window.RPChat.storyManager.setContent(finalContent);
 						sessionStorage.setItem('storyContent', finalContent);

@@ -16,5 +16,9 @@ const El = {
 	scrollTopBtn: document.getElementById('scroll-top'),
 	scrollBottomBtn: document.getElementById('scroll-bottom'),
 	// New elements for Markdown extraction
-	extractMdBtn: document.getElementById('extract-chat-md')
+	extractMdBtn: document.getElementById('extract-chat-md'),
+	toggleSystemPromptBtn: document.getElementById('toggle-system-prompt'),
+	systemPromptModal: document.getElementById('system-prompt-modal'),
+	systemPromptText: document.getElementById('system-prompt-text'),
+	closeSystemPromptBtn: document.getElementById('close-system-prompt')
 };

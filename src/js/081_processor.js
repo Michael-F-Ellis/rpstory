@@ -23,7 +23,6 @@ class IterativePromptProcessor {
         const errors = [];
 
         // Check for nesting or unterminated brackets
-        // This is a simple validation.
         let openPrompt = text.split('[[').length - 1;
         let closePrompt = text.split(']]').length - 1;
         let openBG = text.split('{{').length - 1;
@@ -33,8 +32,8 @@ class IterativePromptProcessor {
         if (openBG !== closeBG) errors.push("Unterminated background brackets {{ }}");
 
         // Use regex with exec to get indices
-        const promptRegex = /\[\[(.*?)\]\]/g;
-        const bgRegex = /\{\{(.*?)\}\}/g;
+        const promptRegex = /\[\[(.*?)\]\]/gs; // Added 's' flag for multi-line prompts
+        const bgRegex = /\{\{(.*?)\}\}/gs;     // Added 's' flag for multi-line backgrounds
 
         let match;
         while ((match = promptRegex.exec(text)) !== null) {
@@ -53,12 +52,12 @@ class IterativePromptProcessor {
             });
         }
 
-        // Check for nesting (simple check: if a match contains [[ or {{ inside the content)
+        // Check for nesting
         prompts.forEach(p => {
             if (p.content.includes('[[') || p.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
         });
         backgroundBlocks.forEach(b => {
-            if (b.content.includes('[[') || b.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
+             if (b.content.includes('[[') || b.content.includes('{{')) errors.push("Nesting brackets is not permitted.");
         });
 
         return { prompts, backgroundBlocks, errors };

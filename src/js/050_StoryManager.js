@@ -45,7 +45,7 @@ class StoryManager {
     }
 
     /**
-     * Apply syntax highlighting to [[prompt]] and {{background}} blocks.
+     * Apply syntax highlighting to [[prompt]], {{SYSTEM ...}} and {{background}} blocks.
      * Uses a selection save/restore trick based on character offset.
      */
     applyHighlighting(force = false) {
@@ -63,11 +63,13 @@ class StoryManager {
         const rawText = this.getContent();
         
         // Only re-render if text actually changed or forced
-        // (This helps avoid jumps while typing plain text)
         const escaped = this._escapeHTML(rawText);
-        const highlighted = escaped
-            .replace(/\[\[(.*?)\]\]/g, '<span class="prompt-highlight">[[$1]]</span>')
-            .replace(/\{\{(.*?)\}\}/g, '<span class="background-highlight">{{$1}}</span>');
+        let highlighted = escaped
+            .replace(/\[\[(.*?)\]\]/gs, '<span class="prompt-highlight">[[$1]]</span>');
+            
+        highlighted = highlighted.replace(/\{\{(.*?)\}\}/gs, (match, content) => {
+            return `<span class="background-highlight">${match}</span>`;
+        });
 
         if (this.container.innerHTML !== highlighted || force) {
             this.container.innerHTML = highlighted;
@@ -80,6 +82,7 @@ class StoryManager {
         this._notifyUpdate();
     }
 
+
     _escapeHTML(text) {
         return text
             .replace(/&/g, '&amp;')
@@ -88,7 +91,9 @@ class StoryManager {
     }
 
     _getCursorOffset() {
+        // ... (rest of the helper methods remain unchanged)
         const selection = window.getSelection();
+        if (selection.rangeCount === 0) return 0;
         const range = selection.getRangeAt(0);
         const preCaretRange = range.cloneRange();
         preCaretRange.selectNodeContents(this.container);
@@ -124,14 +129,12 @@ class StoryManager {
     }
 
     _handleInput() {
-        // Debounce highlighting to avoid lag while typing fast
         if (this._highlightTimeout) clearTimeout(this._highlightTimeout);
         this._highlightTimeout = setTimeout(() => this.applyHighlighting(), 500);
         this._notifyUpdate();
     }
 
     _handleKeyDown(e) {
-        // Custom keys handling if needed (e.g. Tab)
     }
 
     _notifyUpdate() {
@@ -140,21 +143,26 @@ class StoryManager {
         }
     }
 
-    /**
-     * Highlights an active prompt during processing.
-     */
     highlightActivePrompt(index, length) {
-        // Implementation for visual feedback during generation
     }
 }
 
-// Global CSS for highlighting (to be injected or added to main.css)
+// Global CSS for highlighting
 const STORY_STYLES = `
 .prompt-highlight {
     background-color: rgba(128, 90, 213, 0.2);
     border-bottom: 2px solid #805ad5;
     font-weight: bold;
     color: #553c9a;
+}
+.system-highlight {
+    background-color: rgba(221, 107, 32, 0.15);
+    border: 2px solid #dd6b20;
+    font-weight: bold;
+    color: #9c4221;
+    display: block;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem;
 }
 .background-highlight {
     background-color: rgba(49, 130, 206, 0.1);

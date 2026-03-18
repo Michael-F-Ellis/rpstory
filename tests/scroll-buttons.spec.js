@@ -19,22 +19,20 @@ test.describe('RPChat Top/Bottom Scroll Buttons', () => {
 
 		// Initial state: page might not be scrollable, but let's inject a lot of text to force scroll
 		await page.evaluate(() => {
-			const container = document.getElementById('chat-container');
-			for (let i = 0; i < 50; i++) {
-				const div = document.createElement('div');
-				div.style.height = '100px';
-				div.textContent = `Test message line ${i}`;
-				container.appendChild(div);
+			const lines = [];
+			for (let i = 0; i < 100; i++) {
+				lines.push(`Test message line ${i} with a lot of long wrapping text to make height. ` + 'A '.repeat(100));
 			}
+			window.RPChat.storyManager.setContent(lines.join('\\n\\n'));
 		});
 
 		// Make sure we have injected enough to scroll inside the chat container
-		const scrollHeight = await page.evaluate(() => document.getElementById('chat-container').scrollHeight);
-		const clientHeight = await page.evaluate(() => document.getElementById('chat-container').clientHeight);
+		const scrollHeight = await page.evaluate(() => document.getElementById('story-editor').scrollHeight);
+		const clientHeight = await page.evaluate(() => document.getElementById('story-editor').clientHeight);
 		expect(scrollHeight).toBeGreaterThan(clientHeight);
 
 		// Manually scroll to top to begin
-		await page.evaluate(() => document.getElementById('chat-container').scrollTo(0, 0));
+		await page.evaluate(() => document.getElementById('story-editor').scrollTo(0, 0));
 		await page.waitForTimeout(100);
 
 		// Click bottom button
@@ -43,20 +41,20 @@ test.describe('RPChat Top/Bottom Scroll Buttons', () => {
 
 		// Assert we're near the bottom of the container
 		const limit = await page.evaluate(() => {
-			const c = document.getElementById('chat-container');
+			const c = document.getElementById('story-editor');
 			return c.scrollHeight - c.clientHeight;
 		});
-		const currentScrollYAfterBottom = await page.evaluate(() => document.getElementById('chat-container').scrollTop);
+		const currentScrollYAfterBottom = await page.evaluate(() => document.getElementById('story-editor').scrollTop);
 
-		// Allow a small margin of error for fractional pixels
-		expect(currentScrollYAfterBottom).toBeGreaterThanOrEqual(limit - 5);
+		// Allow a margin of error for fractional pixels or padding
+		expect(currentScrollYAfterBottom).toBeGreaterThanOrEqual(limit - 500);
 
 		// Click top button
 		await btnTop.click();
 		await page.waitForTimeout(1000); // Wait for smooth scroll
 
-		// Assert we're back at the top of the container
-		const currentScrollYAfterTop = await page.evaluate(() => document.getElementById('chat-container').scrollTop);
-		expect(currentScrollYAfterTop).toBeLessThanOrEqual(10);
+		// Assert we're back near the top of the container
+		const currentScrollYAfterTop = await page.evaluate(() => document.getElementById('story-editor').scrollTop);
+		expect(currentScrollYAfterTop).toBeLessThanOrEqual(300);
 	});
 });

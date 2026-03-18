@@ -496,17 +496,25 @@ function attachEventListeners() {
 	// Scroll buttons
 	if (El.scrollTopBtn) {
 		El.scrollTopBtn.addEventListener('click', () => {
-			if (El.chatContainer) {
-				El.chatContainer.scrollTo({ top: 0, behavior: 'smooth' });
+			if (El.storyEditor) {
+				El.storyEditor.scrollTo({ top: 0, behavior: 'smooth' });
 			}
 		});
 	}
 	if (El.scrollBottomBtn) {
 		El.scrollBottomBtn.addEventListener('click', () => {
-			if (El.chatContainer) {
-				El.chatContainer.scrollTo({ top: El.chatContainer.scrollHeight, behavior: 'smooth' });
+			if (El.storyEditor) {
+				El.storyEditor.scrollTo({ top: El.storyEditor.scrollHeight, behavior: 'smooth' });
 			}
 		});
+	}
+
+	// Toggle System Prompt Modal
+	if (El.toggleSystemPromptBtn) {
+		El.toggleSystemPromptBtn.addEventListener('click', handleToggleSystemPrompt);
+	}
+	if (El.closeSystemPromptBtn) {
+		El.closeSystemPromptBtn.addEventListener('click', handleCloseSystemPrompt);
 	}
 
 	// Initial button state (could be simplified)
@@ -612,6 +620,7 @@ async function handleProcessStory() {
         // Update story editor with changes
         storyManager.setContent(data.updatedText);
         showStatus(`Processed prompt. ${data.response.length} chars added.`, 'success');
+        scrollToBottom();
     };
 
     const onTotalError = (err) => {
@@ -630,6 +639,7 @@ async function handleProcessStory() {
     isProcessing = false;
     El.sendButton.disabled = false;
     showStatus('Story development complete.', 'success');
+    scrollToBottom();
 }
 
 // Handle API errors
@@ -653,6 +663,30 @@ function handleClearStory() {
 		sessionStorage.removeItem('storyContent');
 	}
 	showStatus('Story cleared');
+}
+
+// Handle system prompt toggle (Modal)
+function handleToggleSystemPrompt() {
+    if (!El.systemPromptModal || !El.systemPromptText) return;
+    
+    // Populate with current prompt before showing
+    El.systemPromptText.value = getCurrentSystemPrompt();
+    El.systemPromptModal.style.display = 'flex';
+}
+
+function handleCloseSystemPrompt() {
+    if (!El.systemPromptModal || !El.systemPromptText) return;
+    
+    const newPrompt = El.systemPromptText.value.trim();
+    if (newPrompt) {
+        sessionStorage.setItem('storySystemPrompt', newPrompt);
+        showStatus('System prompt updated for this story', 'success');
+    } else {
+        sessionStorage.removeItem('storySystemPrompt');
+        showStatus('System prompt reset to default', 'info');
+    }
+    
+    El.systemPromptModal.style.display = 'none';
 }
 
 // Show status message and use as notification handler for ChatManager
@@ -716,6 +750,7 @@ try {
 
     // Call initialization
     initializeApp();
+
 } catch (e) {
     console.error("Critical initialization error:", e);
     const statusEl = document.getElementById('status-message');

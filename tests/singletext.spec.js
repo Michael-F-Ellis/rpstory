@@ -43,10 +43,11 @@ test.describe('RPStory SingleText Mode', () => {
                     }
                 };
             };
-            
-            // Set dummy API key
-            localStorage.setItem('apiKeys', JSON.stringify({ 'OPENAI_API_KEY': 'fake-key' }));
         });
+
+        // Set dummy API key via UI to ensure it matches the current provider
+        await page.locator('#api-key').fill('dummy-api-key-for-test');
+        await page.locator('#save-key').click();
 	});
 
 	test('should process a single [[prompt]]', async ({ page }) => {

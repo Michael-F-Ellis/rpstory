@@ -38,6 +38,12 @@ function updateSystemPromptSelector() {
 
 // Function to get the current system prompt content
 function getCurrentSystemPrompt() {
+	// First priority: Story-specific system prompt (Separate Editor approach)
+	const storyPrompt = sessionStorage.getItem('storySystemPrompt');
+	if (storyPrompt) {
+		return storyPrompt;
+	}
+
 	const selector = El.systemPromptSelector;
 	if (!selector) return 'You are a helpful assistant.';
 
